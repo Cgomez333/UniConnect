@@ -1,11 +1,7 @@
-import {View, Text} from 'react-native';
+/**
+ * app/(tabs)/index.tsx
+ * Pantalla principal del tab — es el Feed
+ * Simplemente re-exporta el componente FeedScreen
+ */
 
-export default function HomeScreen() {
-
-  return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-      <Text>Pantalla de inicio</Text>
-    </View>
-  );
-}
-
+export { default } from "./feed";
