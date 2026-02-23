@@ -11,14 +11,14 @@ import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useRef, useState } from "react";
 import {
-    Dimensions,
-    FlatList,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
-    ViewToken,
-    useColorScheme,
+  Dimensions,
+  FlatList,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  ViewToken,
+  useColorScheme,
 } from "react-native";
 
 const { width: SCREEN_W } = Dimensions.get("window");
@@ -78,7 +78,7 @@ export default function OnboardingScreen() {
   const handleFinish = () => {
     // TODO: guardar en AsyncStorage que ya vio el onboarding
     // await AsyncStorage.setItem("onboarding_done", "true");
-    router.replace("/login");
+    router.replace("/login" as any);
   };
 
   const isLast = activeIndex === SLIDES.length - 1;
@@ -146,21 +146,7 @@ export default function OnboardingScreen() {
           </Text>
         </TouchableOpacity>
 
-        {/* Link a login directo */}
-        {isLast && (
-          <TouchableOpacity
-            style={styles.loginBtn}
-            onPress={() => router.replace("/login")}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.loginBtnText, { color: C.textSecondary }]}>
-              Ya tengo cuenta —{" "}
-              <Text style={{ color: C.primary, fontWeight: "600" }}>
-                Inicia sesión
-              </Text>
-            </Text>
-          </TouchableOpacity>
-        )}
+
       </View>
     </View>
   );
@@ -305,11 +291,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
     letterSpacing: 0.3,
-  },
-  loginBtn: {
-    paddingVertical: 4,
-  },
-  loginBtnText: {
-    fontSize: 14,
   },
 });

@@ -1,6 +1,6 @@
 /**
- * app/(tabs)/login.tsx
- * Login conectado al Zustand store (soporta mock y producción)
+ * app/login.tsx
+ * Login con splash diferenciado por rol y redirección robusta
  */
 
 import { Link, router } from "expo-router";
@@ -18,9 +18,11 @@ import {
 } from "react-native";
 
 import { AuthInput } from "@/components/ui/AuthInput";
-import { ErrorBanner } from "@/components/ui/Errorbanner";
-import { PrimaryButton } from "@/components/ui/Primarybutton";
+import { ErrorBanner } from "@/components/ui/ErrorBanner";
+import { PrimaryButton } from "@/components/ui/PrimaryButton";
+import { SplashLoader } from "@/components/ui/SplashLoader";
 import { Colors } from "@/constants/Colors";
+import type { UserRole } from "@/store/useAuthStore";
 import { useAuthStore } from "@/store/useAuthStore";
 
 const UCALDAS_REGEX = /^[a-zA-Z0-9._%+-]+@ucaldas\.edu\.co$/;
@@ -29,7 +31,6 @@ export default function LoginScreen() {
   const scheme = useColorScheme() ?? "light";
   const C = Colors[scheme];
 
-  // Zustand store
   const signIn = useAuthStore((s) => s.signIn);
   const isLoading = useAuthStore((s) => s.isLoading);
 
@@ -37,6 +38,9 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [emailError, setEmailError] = useState("");
   const [formError, setFormError] = useState("");
+
+  // Para el splash: guardamos el rol antes de navegar
+  const [splashRole, setSplashRole] = useState<UserRole | null>(null);
 
   const handleEmailChange = (value: string) => {
     setEmail(value);
@@ -60,9 +64,22 @@ export default function LoginScreen() {
 
     try {
       await signIn(email, password);
-      // Si no lanzó error, el usuario quedó autenticado en el store
-      router.replace("/");
+
+      // Leer el rol directamente del store (fuera de hook, siempre actualizado)
+      const role = useAuthStore.getState().user?.role ?? "estudiante";
+      setSplashRole(role);
+
+      // Esperar que el splash se vea y luego navegar a la app
+      setTimeout(() => {
+        if (role === "admin") {
+          router.replace("/(admin)" as any);
+        } else {
+          router.replace("/(tabs)" as any);
+        }
+      }, 1200);
+
     } catch (error: any) {
+      setSplashRole(null);
       const msg: string = error?.message ?? "";
       if (msg.includes("Email not confirmed")) {
         setFormError("Confirma tu correo institucional antes de ingresar.");
@@ -73,6 +90,20 @@ export default function LoginScreen() {
       }
     }
   };
+
+  // ── Splash mientras navega ──────────────────────────────────────────────────
+  if (splashRole !== null) {
+    return (
+      <SplashLoader
+        role={splashRole}
+        message={
+          splashRole === "admin"
+            ? "Cargando panel de administración..."
+            : "Cargando tu feed de estudio..."
+        }
+      />
+    );
+  }
 
   const isValid = UCALDAS_REGEX.test(email) && password.length >= 6;
 
@@ -88,7 +119,7 @@ export default function LoginScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Logo ───────────────────────────────────────────────────────── */}
+        {/* Logo */}
         <View style={styles.header}>
           <View style={[styles.logoBox, { borderColor: C.primary }]}>
             <Text style={[styles.logoText, { color: C.primary }]}>UC</Text>
@@ -100,7 +131,7 @@ export default function LoginScreen() {
           </Text>
         </View>
 
-        {/* ── Card ───────────────────────────────────────────────────────── */}
+        {/* Card */}
         <View style={[styles.card, { backgroundColor: C.surface }]}>
           <Text style={[styles.cardTitle, { color: C.textPrimary }]}>
             Inicia sesión
@@ -204,5 +235,5 @@ const styles = StyleSheet.create({
   registerRow: { flexDirection: "row", justifyContent: "center" },
   registerText: { fontSize: 14 },
   registerLink: { fontSize: 14, fontWeight: "600" },
-  footer: { textAlign: "center", fontSize: 12, marginTop: 24 },
+  footer: { textAlign: "center", fontSize: 12, marginTop: 16 },
 });
