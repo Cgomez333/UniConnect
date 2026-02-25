@@ -4,72 +4,80 @@
  * Conectado a Supabase real via profileService y careerService
  */
 
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import {
-  ActivityIndicator, Alert, ScrollView, StyleSheet, Text,
+  ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text,
   TouchableOpacity, useColorScheme, View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Colors } from "@/constants/Colors";
 import { getMyRequests, StudyRequest } from "@/lib/services/careerService";
-import { getMyPrograms, getMySubjects, UserProgram, UserSubject } from "@/lib/services/profileService";
+import { getMyPrograms, getMySubjects, getProfile, UserProgram, UserSubject } from "@/lib/services/profileService";
 import { useAuthStore } from "@/store/useAuthStore";
 
 export default function PerfilScreen() {
-  const scheme  = useColorScheme() ?? "light";
-  const C       = Colors[scheme];
-  const insets  = useSafeAreaInsets();
+  const scheme = useColorScheme() ?? "light";
+  const C = Colors[scheme];
+  const insets = useSafeAreaInsets();
 
-  const user    = useAuthStore((s) => s.user);
+  const user = useAuthStore((s) => s.user);
   const signOut = useAuthStore((s) => s.signOut);
 
   // ── Estado desde Supabase ──────────────────────────────────────────────────
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [userPrograms, setUserPrograms] = useState<UserProgram[]>([]);
   const [userSubjects, setUserSubjects] = useState<UserSubject[]>([]);
-  const [myRequests,   setMyRequests]   = useState<StudyRequest[]>([]);
-  const [isLoading,    setIsLoading]    = useState(true);
+  const [myRequests, setMyRequests] = useState<StudyRequest[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    if (!user?.id) return;
+  useFocusEffect(
+    useCallback(() => {
+      if (!user?.id) return;
 
-    const load = async () => {
-      setIsLoading(true);
-      try {
-        const [progs, subs, reqs] = await Promise.all([
-          getMyPrograms(user.id),
-          getMySubjects(user.id),
-          getMyRequests(user.id),
-        ]);
-        setUserPrograms(progs);
-        setUserSubjects(subs);
-        setMyRequests(reqs);
-      } catch (e: any) {
-        console.error("Error cargando perfil:", e.message);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+      const load = async () => {
+        setIsLoading(true);
+        try {
+          const [profile, progs, subs, reqs] = await Promise.all([
+            getProfile(user.id),
+            getMyPrograms(user.id),
+            getMySubjects(user.id),
+            getMyRequests(user.id),
+          ]);
+          // Actualizar avatar siempre que volvamos a esta pantalla
+          setAvatarUrl(profile?.avatar_url ?? null);
+          setUserPrograms(progs);
+          setUserSubjects(subs);
+          setMyRequests(reqs);
+        } catch (e: any) {
+          console.error("Error cargando perfil:", e.message);
+        } finally {
+          setIsLoading(false);
+        }
+      };
 
-    load();
-  }, [user?.id]);
+      load();
+    }, [user?.id])
+  );
 
   // ── Derivados ──────────────────────────────────────────────────────────────
   const initials = (user?.fullName ?? "UC")
     .split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase();
 
   const primaryProgram = userPrograms.find(p => p.is_primary) ?? userPrograms[0];
-  const primaryProgramName  = primaryProgram?.programs?.name ?? "—";
-  const primaryFacultyName  = (primaryProgram?.programs as any)?.faculties?.name ?? "—";
+  const primaryProgramName = primaryProgram?.programs?.name ?? "—";
+  const primaryFacultyName = (primaryProgram?.programs as any)?.faculties?.name ?? "—";
 
   const handleSignOut = () => {
     Alert.alert("Cerrar sesión", "¿Estás seguro de que quieres salir?", [
       { text: "Cancelar", style: "cancel" },
-      { text: "Salir", style: "destructive", onPress: async () => {
-        await signOut(); router.replace("/login");
-      }},
+      {
+        text: "Salir", style: "destructive", onPress: async () => {
+          await signOut(); router.replace("/login");
+        }
+      },
     ]);
   };
 
@@ -84,9 +92,19 @@ export default function PerfilScreen() {
         {/* ── Hero ────────────────────────────────────────────────────── */}
         <View style={[styles.heroSection, { backgroundColor: C.surface, borderBottomColor: C.border }]}>
           <View style={[styles.heroBar, { backgroundColor: C.primary }]} />
-          <View style={[styles.avatarLarge, { backgroundColor: C.primary, borderColor: C.surface }]}>
-            <Text style={styles.avatarLargeText}>{initials}</Text>
-          </View>
+
+          {/* Avatar: foto si existe, iniciales si no */}
+          {avatarUrl ? (
+            <Image
+              source={{ uri: avatarUrl }}
+              style={[styles.avatarLarge, { borderColor: C.surface }]}
+            />
+          ) : (
+            <View style={[styles.avatarLarge, { backgroundColor: C.primary, borderColor: C.surface }]}>
+              <Text style={styles.avatarLargeText}>{initials}</Text>
+            </View>
+          )}
+
           <View style={[styles.goldAccent, { backgroundColor: C.accent }]} />
           <Text style={[styles.profileName, { color: C.textPrimary }]}>
             {user?.fullName ?? "Estudiante"}
@@ -121,12 +139,10 @@ export default function PerfilScreen() {
                 <Text style={[styles.sectionTitle, { color: C.textPrimary }]}>Información académica</Text>
               </View>
 
-              {/* Semestre */}
               {user?.semester ? (
                 <InfoRow emoji="📅" label="Semestre" value={`${user.semester}° semestre`} C={C} />
               ) : null}
 
-              {/* Programas */}
               <View style={styles.infoRow}>
                 <Text style={styles.infoEmoji}>🎓</Text>
                 <View style={styles.infoContent}>
@@ -270,7 +286,7 @@ function InfoRow({ emoji, label, value, C }: {
       <Text style={styles.infoEmoji}>{emoji}</Text>
       <View style={styles.infoContent}>
         <Text style={[styles.infoLabel, { color: C.textSecondary }]}>{label}</Text>
-        <Text style={[styles.infoValue,  { color: C.textPrimary  }]}>{value}</Text>
+        <Text style={[styles.infoValue, { color: C.textPrimary }]}>{value}</Text>
       </View>
     </View>
   );
@@ -287,65 +303,77 @@ function StatBox({ label, value, C }: {
   );
 }
 
-// ── Estilos — sin cambios ─────────────────────────────────────────────────────
+// ── Estilos ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   safe: { flex: 1 },
 
   heroSection: { alignItems: "center", paddingBottom: 24, borderBottomWidth: 1, marginBottom: 12, overflow: "hidden" },
-  heroBar:     { width: "100%", height: 80, marginBottom: -40 },
-  avatarLarge: { width: 88, height: 88, borderRadius: 44, alignItems: "center",
-    justifyContent: "center", marginBottom: 12, borderWidth: 3 },
+  heroBar: { width: "100%", height: 80, marginBottom: -40 },
+  avatarLarge: {
+    width: 88, height: 88, borderRadius: 44, alignItems: "center",
+    justifyContent: "center", marginBottom: 12, borderWidth: 3,
+  },
   avatarLargeText: { fontSize: 32, fontWeight: "800", color: "#fff" },
-  goldAccent:  { width: 32, height: 4, borderRadius: 2, marginBottom: 10 },
+  goldAccent: { width: 32, height: 4, borderRadius: 2, marginBottom: 10 },
   profileName: { fontSize: 20, fontWeight: "700", letterSpacing: -0.3, marginBottom: 4 },
-  profileEmail:{ fontSize: 13, marginBottom: 10 },
-  programBadge:{ paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20,
-    borderWidth: 1, marginBottom: 14 },
+  profileEmail: { fontSize: 13, marginBottom: 10 },
+  programBadge: {
+    paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20,
+    borderWidth: 1, marginBottom: 14
+  },
   programBadgeText: { fontSize: 13, fontWeight: "600" },
-  editBtn:     { paddingHorizontal: 24, paddingVertical: 8, borderRadius: 8, borderWidth: 1.5 },
+  editBtn: { paddingHorizontal: 24, paddingVertical: 8, borderRadius: 8, borderWidth: 1.5 },
   editBtnText: { fontSize: 14, fontWeight: "600" },
 
-  loadingContainer: { flex: 1, alignItems: "center", justifyContent: "center",
-    paddingVertical: 60, gap: 12 },
+  loadingContainer: {
+    flex: 1, alignItems: "center", justifyContent: "center",
+    paddingVertical: 60, gap: 12
+  },
   loadingText: { fontSize: 14 },
 
   section: { marginHorizontal: 16, marginBottom: 12, borderRadius: 12, borderWidth: 1, padding: 16 },
   sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
-  sectionTitle:  { fontSize: 15, fontWeight: "700" },
+  sectionTitle: { fontSize: 15, fontWeight: "700" },
   sectionAction: { fontSize: 13, fontWeight: "600" },
 
-  infoRow:    { flexDirection: "row", alignItems: "flex-start", paddingVertical: 8 },
-  infoEmoji:  { fontSize: 18, marginRight: 12, marginTop: 2 },
-  infoContent:{ flex: 1 },
-  infoLabel:  { fontSize: 11, marginBottom: 2 },
-  infoValue:  { fontSize: 14, fontWeight: "500" },
-  primaryBadge:     { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  infoRow: { flexDirection: "row", alignItems: "flex-start", paddingVertical: 8 },
+  infoEmoji: { fontSize: 18, marginRight: 12, marginTop: 2 },
+  infoContent: { flex: 1 },
+  infoLabel: { fontSize: 11, marginBottom: 2 },
+  infoValue: { fontSize: 14, fontWeight: "500" },
+  primaryBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   primaryBadgeText: { fontSize: 10, fontWeight: "700" },
 
   bioText: { fontSize: 14, lineHeight: 22 },
 
   subjectsList: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  subjectChip:  { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, borderWidth: 1 },
+  subjectChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, borderWidth: 1 },
   subjectChipText: { fontSize: 13, fontWeight: "500" },
 
-  emptySmall:     { alignItems: "center", paddingVertical: 16, gap: 6 },
+  emptySmall: { alignItems: "center", paddingVertical: 16, gap: 6 },
   emptySmallText: { fontSize: 13, textAlign: "center" },
 
-  miniCard:        { borderWidth: 1, borderRadius: 8, padding: 12, marginBottom: 8 },
-  miniCardTag:     { alignSelf: "flex-start", paddingHorizontal: 8, paddingVertical: 3,
-    borderRadius: 4, marginBottom: 6 },
+  miniCard: { borderWidth: 1, borderRadius: 8, padding: 12, marginBottom: 8 },
+  miniCardTag: {
+    alignSelf: "flex-start", paddingHorizontal: 8, paddingVertical: 3,
+    borderRadius: 4, marginBottom: 6
+  },
   miniCardTagText: { fontSize: 11, fontWeight: "600" },
-  miniCardTitle:   { fontSize: 14, fontWeight: "600", marginBottom: 4 },
-  miniCardMeta:    { fontSize: 12 },
+  miniCardTitle: { fontSize: 14, fontWeight: "600", marginBottom: 4 },
+  miniCardMeta: { fontSize: 12 },
 
-  statsRow:    { flexDirection: "row", marginHorizontal: 16, marginBottom: 12,
-    borderRadius: 12, borderWidth: 1, overflow: "hidden" },
-  statBox:     { flex: 1, alignItems: "center", paddingVertical: 16 },
+  statsRow: {
+    flexDirection: "row", marginHorizontal: 16, marginBottom: 12,
+    borderRadius: 12, borderWidth: 1, overflow: "hidden"
+  },
+  statBox: { flex: 1, alignItems: "center", paddingVertical: 16 },
   statDivider: { width: 1 },
-  statValue:   { fontSize: 20, fontWeight: "800" },
-  statLabel:   { fontSize: 11, marginTop: 2 },
+  statValue: { fontSize: 20, fontWeight: "800" },
+  statLabel: { fontSize: 11, marginTop: 2 },
 
-  signOutBtn:  { marginHorizontal: 16, borderWidth: 1.5, borderRadius: 10,
-    paddingVertical: 14, alignItems: "center", marginBottom: 8 },
+  signOutBtn: {
+    marginHorizontal: 16, borderWidth: 1.5, borderRadius: 10,
+    paddingVertical: 14, alignItems: "center", marginBottom: 8
+  },
   signOutText: { fontSize: 14, fontWeight: "600" },
 });

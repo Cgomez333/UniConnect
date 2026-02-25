@@ -4,6 +4,8 @@
  */
 
 import { supabase } from "@/lib/supabase"
+import { decode } from "base64-arraybuffer"
+import * as FileSystem from "expo-file-system/legacy"
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 export interface Profile {
@@ -73,8 +75,59 @@ export async function updateProfile(
   return data
 }
 
+// ── Subir foto de perfil ──────────────────────────────────────────────────────
+/**
+ * Sube una imagen al bucket 'avatars' y actualiza avatar_url en profiles.
+ * Usa expo-file-system + base64-arraybuffer para evitar el bug de fetch()
+ * en Android con URIs locales del ImagePicker.
+ *
+ * @param userId   - El auth.uid() del usuario autenticado
+ * @param imageUri - La URI local devuelta por expo-image-picker
+ * @returns La URL pública del avatar subido
+ */
+export async function uploadAvatar(userId: string, imageUri: string): Promise<string> {
+  // 1. Leer el archivo como base64 (funciona en Android e iOS sin problemas)
+  const base64 = await FileSystem.readAsStringAsync(imageUri, {
+    encoding: "base64",
+  })
+
+  // 2. Convertir base64 → ArrayBuffer (Supabase Storage lo necesita así)
+  const arrayBuffer = decode(base64)
+
+  // 3. Determinar extensión y tipo MIME
+  const uriParts = imageUri.split(".")
+  const fileExt = uriParts[uriParts.length - 1]?.toLowerCase() ?? "jpg"
+  const mimeType = fileExt === "png" ? "image/png" : "image/jpeg"
+
+  // 4. Ruta en el bucket: carpeta por usuario, mismo nombre → se sobreescribe
+  const filePath = `${userId}/avatar.${fileExt}`
+
+  // 5. Subir al bucket (upsert: reemplaza si ya existe)
+  const { error: uploadError } = await supabase.storage
+    .from("avatars")
+    .upload(filePath, arrayBuffer, {
+      contentType: mimeType,
+      upsert: true,
+    })
+
+  if (uploadError) throw new Error(`Error al subir imagen: ${uploadError.message}`)
+
+  // 6. URL pública con cache-buster para forzar refresco en la UI
+  const { data } = supabase.storage.from("avatars").getPublicUrl(filePath)
+  const publicUrl = `${data.publicUrl}?t=${Date.now()}`
+
+  // 7. Guardar la URL en la tabla profiles
+  const { error: updateError } = await supabase
+    .from("profiles")
+    .update({ avatar_url: publicUrl })
+    .eq("id", userId)
+
+  if (updateError) throw new Error(`Error al guardar URL: ${updateError.message}`)
+
+  return publicUrl
+}
+
 // ── Programas del usuario ─────────────────────────────────────────────────────
-// Trae los programas con nombre de facultad incluido
 export async function getMyPrograms(userId: string): Promise<UserProgram[]> {
   const { data, error } = await supabase
     .from("user_programs")
@@ -88,7 +141,7 @@ export async function getMyPrograms(userId: string): Promise<UserProgram[]> {
       )
     `)
     .eq("user_id", userId)
-    .order("is_primary", { ascending: false }) // el principal primero
+    .order("is_primary", { ascending: false })
 
   if (error) throw error
   return data ?? []
@@ -100,7 +153,6 @@ export async function addMyProgram(
   programId: string,
   isPrimary = false
 ): Promise<void> {
-  // Si es primario, desmarcar el actual
   if (isPrimary) {
     await supabase
       .from("user_programs")
@@ -129,23 +181,23 @@ export async function removeMyProgram(
   if (error) throw error
 }
 
-// Marcar un programa como principal
+// Asignar o cambiar el programa del estudiante
 export async function setPrimaryProgram(
   userId: string,
   programId: string
 ): Promise<void> {
-  // Desmarcar todos
   await supabase
     .from("user_programs")
-    .update({ is_primary: false })
+    .delete()
     .eq("user_id", userId)
 
-  // Marcar el nuevo
   const { error } = await supabase
     .from("user_programs")
-    .update({ is_primary: true })
-    .eq("user_id", userId)
-    .eq("program_id", programId)
+    .insert({
+      user_id: userId,
+      program_id: programId,
+      is_primary: true,
+    })
 
   if (error) throw error
 }
@@ -165,7 +217,7 @@ export async function getMySubjects(userId: string): Promise<UserSubject[]> {
   return data ?? []
 }
 
-// Agregar una materia al perfil (el trigger valida que pertenezca a un programa del usuario)
+// Agregar una materia al perfil
 export async function addMySubject(
   userId: string,
   subjectId: string
@@ -175,7 +227,6 @@ export async function addMySubject(
     .insert({ user_id: userId, subject_id: subjectId })
 
   if (error) {
-    // El trigger lanza un error si la materia no pertenece a los programas del usuario
     if (error.message.includes("validate_user_subject")) {
       throw new Error("Esta materia no pertenece a ninguno de tus programas registrados.")
     }
