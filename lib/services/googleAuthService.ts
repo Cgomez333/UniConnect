@@ -15,10 +15,9 @@ WebBrowser.maybeCompleteAuthSession()
 
 const ALLOWED_DOMAIN = "ucaldas.edu.co"
 
-// URI fija — debe coincidir exactamente con la registrada en Google Cloud
-const REDIRECT_URI = AuthSession.makeRedirectUri({
-  scheme: "com.juanse108.uniconnet",
-})
+// Al no pasarle configuración, Expo genera la URI automáticamente 
+// basada en el entorno (Web, Expo Go o Nativo).
+const REDIRECT_URI = AuthSession.makeRedirectUri();
 
 export function useGoogleAuth() {
   const [loading, setLoading] = useState(false)
@@ -78,8 +77,7 @@ export function useGoogleAuth() {
         return
       }
 
-      // 3. El onAuthStateChange del store carga el perfil automáticamente
-      //    Esperamos un momento y redirigimos al feed
+      // 3. Redirección exitosa al Feed/Tabs
       setTimeout(() => {
         router.replace("/(tabs)" as any)
       }, 500)
@@ -96,6 +94,10 @@ export function useGoogleAuth() {
       setError("Falta Client ID en .env")
       return
     }
+    
+    // Este log es vital para saber qué URL registrar en Google Cloud Console
+    console.log("🔗 URI de Redirección generada:", REDIRECT_URI);
+    
     setError(null)
     setLoading(true)
     promptAsync({ showInRecents: true })
