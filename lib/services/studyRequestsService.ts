@@ -1,16 +1,20 @@
 /**
  * lib/services/studyRequestsService.ts
- * Servicio para gestionar solicitudes de estudio — US-005
+ * Servicio para gestionar solicitudes de estudio — US-005 + US-006
  *
- * Relación usada para materias:
- *   user_subjects → subjects  (solo las materias que está cursando el estudiante)
+ * Relación usada para materias inscritas:
+ *   user_subjects → subjects
  *
- * NOTA: No se usa Map ni Set — Hermes (React Native) no soporta sus iteradores.
+ * Relación usada para el feed:
+ *   study_requests → profiles (autor)
+ *   study_requests → subjects → program_subjects → programs → faculties
+ *
+ * NOTA: Sin Map ni Set — Hermes (React Native) no soporta sus iteradores.
  */
 
 import { supabase } from "@/lib/supabase";
 
-// ── Tipos públicos ─────────────────────────────────────────────────────────────
+// ── Tipos — US-005 ─────────────────────────────────────────────────────────────
 
 export interface Subject {
   id: string;
@@ -27,7 +31,35 @@ export interface CreateStudyRequestPayload {
   max_members: number;
 }
 
-// ── Materias que está cursando el estudiante ──────────────────────────────────
+// ── Tipos — US-006 ─────────────────────────────────────────────────────────────
+
+export interface FeedStudyRequest {
+  id: string;
+  author_id: string;
+  subject_id: string;
+  title: string;
+  description: string;
+  modality: Modality;
+  max_members: number;
+  status: "abierta" | "cerrada";
+  created_at: string;
+  // Mapeados desde joins — forma que espera CardSolicitud
+  author: {
+    full_name: string;
+    avatar_url?: string;
+    career?: string;
+  };
+  subject_name: string;
+  faculty_name: string;
+  applications_count?: number;
+}
+
+export interface FeedFilters {
+  modality?: string;
+  search?: string;
+}
+
+// ── Materias inscritas del estudiante ─────────────────────────────────────────
 
 /**
  * Devuelve solo las materias inscritas del estudiante logueado.
@@ -79,7 +111,7 @@ export async function getEnrolledSubjectsForUser(): Promise<Subject[]> {
   );
 }
 
-// ── Study Requests ─────────────────────────────────────────────────────────────
+// ── Crear solicitud de estudio ─────────────────────────────────────────────────
 
 /**
  * Inserta una nueva solicitud de estudio.
@@ -114,4 +146,109 @@ export async function createStudyRequest(
   const { error } = await supabase.from("study_requests").insert(insertData);
 
   if (error) throw error;
+}
+
+// ── Feed de solicitudes ────────────────────────────────────────────────────────
+
+/**
+ * Trae solicitudes activas con join de autor, materia y facultad.
+ * Mapea la respuesta de Supabase al tipo que espera CardSolicitud.
+ *
+ * Jerarquía de join:
+ *   study_requests
+ *     → profiles        (autor)
+ *     → subjects
+ *         → program_subjects
+ *             → programs
+ *                 → faculties
+ */
+export async function getFeedRequests(
+  filters?: FeedFilters,
+  page = 0,
+  pageSize = 10
+): Promise<FeedStudyRequest[]> {
+  let query = supabase
+    .from("study_requests")
+    .select(`
+      id, author_id, subject_id, title, description,
+      modality, max_members, status, created_at,
+      profiles ( full_name, avatar_url ),
+      subjects (
+        name,
+        program_subjects (
+          programs (
+            faculties ( name )
+          )
+        )
+      )
+    `)
+    .eq("is_active", true)
+    .eq("status", "abierta")
+    .order("created_at", { ascending: false })
+    .range(page * pageSize, (page + 1) * pageSize - 1);
+
+  // Filtro de modalidad — la BD guarda "hibrido" sin tilde
+  if (filters?.modality && filters.modality !== "Todos") {
+    const modalityMap: Record<string, string> = {
+      híbrido: "hibrido",
+      presencial: "presencial",
+      virtual: "virtual",
+    };
+    const mapped = modalityMap[filters.modality] ?? filters.modality;
+    query = query.eq("modality", mapped);
+  }
+
+  // Filtro de búsqueda por título
+  if (filters?.search && filters.search.trim() !== "") {
+    query = query.ilike("title", `%${filters.search.trim()}%`);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  const rows: any[] = data ?? [];
+  const result: FeedStudyRequest[] = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+
+    // Extraer nombre de facultad desde la cadena larga de joins
+    let facultyName = "Sin facultad";
+    const psArr: any[] = r.subjects?.program_subjects ?? [];
+    if (psArr.length > 0) {
+      const prog = Array.isArray(psArr[0]?.programs)
+        ? psArr[0].programs[0]
+        : psArr[0]?.programs;
+      const fac = Array.isArray(prog?.faculties)
+        ? prog.faculties[0]
+        : prog?.faculties;
+      if (fac?.name) facultyName = fac.name;
+    }
+
+    // Normalizar "hibrido" → "híbrido" para el frontend
+    const rawModality: string = r.modality ?? "presencial";
+    const modalityDisplay: Modality =
+      rawModality === "hibrido" ? "híbrido" : (rawModality as Modality);
+
+    result.push({
+      id: r.id,
+      author_id: r.author_id,
+      subject_id: r.subject_id,
+      title: r.title,
+      description: r.description,
+      modality: modalityDisplay,
+      max_members: r.max_members,
+      status: r.status,
+      created_at: r.created_at,
+      author: {
+        full_name: r.profiles?.full_name ?? "Usuario",
+        avatar_url: r.profiles?.avatar_url ?? undefined,
+        career: undefined,
+      },
+      subject_name: r.subjects?.name ?? "Sin materia",
+      faculty_name: facultyName,
+    });
+  }
+
+  return result;
 }

@@ -1,15 +1,21 @@
 /**
  * app/(tabs)/feed.tsx
- * Feed corregido — bugs visuales resueltos:
- * 1. SafeAreaView reemplazado por useSafeAreaInsets (funciona en Android)
- * 2. Chips de modalidad con altura fija (no colapsan)
- * 3. Padding bottom correcto para la lista
+ * Feed conectado a Supabase — US-006
+ *
+ * Cambios respecto al mock:
+ * - MOCK_REQUESTS reemplazado por getFeedRequests() real
+ * - MOCK_FACULTIES reemplazado por facultades dinámicas del feed
+ * - Estados: loading, error, lista vacía, pull-to-refresh
+ * - Filtro de modalidad se aplica en el query (Supabase)
+ * - Filtro de facultad se aplica localmente (no requiere query extra)
+ * - Búsqueda por título se aplica en el query (ilike)
  */
 
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   Modal,
   RefreshControl,
@@ -25,51 +31,92 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CardSolicitud } from "@/components/ui/CardSolicitud";
 import { Colors } from "@/constants/Colors";
+import {
+  FeedFilters,
+  FeedStudyRequest,
+  getFeedRequests,
+} from "@/lib/services/studyRequestsService";
 import { useAuthStore } from "@/store/useAuthStore";
-import { MOCK_FACULTIES, MOCK_REQUESTS } from "@/utils/mockData";
 
 const MODALITIES = ["Todos", "presencial", "virtual", "híbrido"];
 
 export default function FeedScreen() {
   const scheme = useColorScheme() ?? "light";
   const C = Colors[scheme];
-  const insets = useSafeAreaInsets(); // ✅ insets reales del dispositivo
-
+  const insets = useSafeAreaInsets();
   const user = useAuthStore((s) => s.user);
 
+  // ── Estado de datos ──────────────────────────────────────────────────────
+  const [requests, setRequests] = useState<FeedStudyRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // ── Filtros ──────────────────────────────────────────────────────────────
   const [search, setSearch] = useState("");
   const [selectedFaculty, setSelectedFaculty] = useState<string | null>(null);
   const [selectedModality, setSelectedModality] = useState("Todos");
   const [showFilters, setShowFilters] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
 
+  // ── Carga de datos ───────────────────────────────────────────────────────
+  const loadFeed = useCallback(async (isRefresh = false) => {
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+    setError(null);
+
+    try {
+      const filters: FeedFilters = {
+        modality: selectedModality,
+        search: search.trim(),
+      };
+      const data = await getFeedRequests(filters);
+      setRequests(data);
+    } catch (e: any) {
+      setError(e.message ?? "Error al cargar el feed.");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [selectedModality, search]);
+
+  // Recargar cuando cambian los filtros de query (modalidad o búsqueda)
+  useEffect(() => {
+    loadFeed();
+  }, [loadFeed]);
+
+  // ── Filtro local de facultad ─────────────────────────────────────────────
+  // Se aplica sobre el array ya cargado sin hacer otra llamada a Supabase
   const filtered = useMemo(() => {
-    return MOCK_REQUESTS.filter((r) => {
-      const matchSearch =
-        search.trim() === "" ||
-        r.title.toLowerCase().includes(search.toLowerCase()) ||
-        r.subject_name.toLowerCase().includes(search.toLowerCase());
-      const matchFaculty = !selectedFaculty || r.faculty_name === selectedFaculty;
-      const matchModality = selectedModality === "Todos" || r.modality === selectedModality;
-      return matchSearch && matchFaculty && matchModality;
-    });
-  }, [search, selectedFaculty, selectedModality]);
+    if (!selectedFaculty) return requests;
+    return requests.filter((r) => r.faculty_name === selectedFaculty);
+  }, [requests, selectedFaculty]);
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await new Promise((r) => setTimeout(r, 800));
-    setRefreshing(false);
-  };
+  // Facultades únicas disponibles en el feed actual (para el modal)
+  const faculties = useMemo(() => {
+    const names: string[] = [];
+    for (let i = 0; i < requests.length; i++) {
+      const name = requests[i].faculty_name;
+      if (name && !names.includes(name)) {
+        names.push(name);
+      }
+    }
+    return names.sort((a, b) => a.localeCompare(b));
+  }, [requests]);
 
   const activeFilters =
     (selectedFaculty ? 1 : 0) + (selectedModality !== "Todos" ? 1 : 0);
 
+  // ── Render ───────────────────────────────────────────────────────────────
   return (
-    // ✅ View normal con paddingTop del inset (no SafeAreaView)
-    <View style={[styles.container, {
-      backgroundColor: C.background,
-      paddingTop: insets.top, // respeta la status bar real
-    }]}>
+    <View
+      style={[
+        styles.container,
+        { backgroundColor: C.background, paddingTop: insets.top },
+      ]}
+    >
       <StatusBar style={scheme === "dark" ? "light" : "dark"} />
 
       {/* ── Header ──────────────────────────────────────────────────────── */}
@@ -79,7 +126,9 @@ export default function FeedScreen() {
             Solicitudes
           </Text>
           <Text style={[styles.headerSub, { color: C.textSecondary }]}>
-            {filtered.length} publicaciones activas
+            {loading
+              ? "Cargando..."
+              : `${filtered.length} publicaciones activas`}
           </Text>
         </View>
         <TouchableOpacity
@@ -87,18 +136,18 @@ export default function FeedScreen() {
           onPress={() => router.push("/nueva-solicitud")}
           activeOpacity={0.85}
         >
-          <Text style={[styles.newBtnText, { color: C.primary }]}>
-            + Nueva
-          </Text>
+          <Text style={[styles.newBtnText, { color: C.primary }]}>+ Nueva</Text>
         </TouchableOpacity>
       </View>
 
       {/* ── Buscador + botón filtros ─────────────────────────────────────── */}
       <View style={[styles.searchRow, { borderBottomColor: C.border }]}>
-        <View style={[styles.searchBox, {
-          backgroundColor: C.surface,
-          borderColor: C.border,
-        }]}>
+        <View
+          style={[
+            styles.searchBox,
+            { backgroundColor: C.surface, borderColor: C.border },
+          ]}
+        >
           <Text style={{ color: C.textPlaceholder, marginRight: 6 }}>🔍</Text>
           <TextInput
             style={[styles.searchInput, { color: C.textPrimary }]}
@@ -110,16 +159,21 @@ export default function FeedScreen() {
           />
           {search.length > 0 && (
             <TouchableOpacity onPress={() => setSearch("")}>
-              <Text style={{ color: C.textSecondary, fontSize: 18, lineHeight: 20 }}>×</Text>
+              <Text style={{ color: C.textSecondary, fontSize: 18, lineHeight: 20 }}>
+                ×
+              </Text>
             </TouchableOpacity>
           )}
         </View>
 
         <TouchableOpacity
-          style={[styles.filterBtn, {
-            backgroundColor: activeFilters > 0 ? C.primary : C.surface,
-            borderColor: C.border,
-          }]}
+          style={[
+            styles.filterBtn,
+            {
+              backgroundColor: activeFilters > 0 ? C.primary : C.surface,
+              borderColor: C.border,
+            },
+          ]}
           onPress={() => setShowFilters(true)}
           activeOpacity={0.8}
         >
@@ -135,7 +189,6 @@ export default function FeedScreen() {
       </View>
 
       {/* ── Chips de modalidad ───────────────────────────────────────────── */}
-      {/* ✅ height fija + flexShrink:0 evita que colapse */}
       <View style={styles.chipsWrapper}>
         <ScrollView
           horizontal
@@ -145,17 +198,32 @@ export default function FeedScreen() {
           {MODALITIES.map((m) => (
             <TouchableOpacity
               key={m}
-              style={[styles.chip, {
-                backgroundColor: selectedModality === m ? C.primary : C.surface,
-                borderColor: selectedModality === m ? C.primary : C.border,
-              }]}
+              style={[
+                styles.chip,
+                {
+                  backgroundColor:
+                    selectedModality === m ? C.primary : C.surface,
+                  borderColor:
+                    selectedModality === m ? C.primary : C.border,
+                },
+              ]}
               onPress={() => setSelectedModality(m)}
               activeOpacity={0.8}
             >
-              <Text style={[styles.chipText, {
-                color: selectedModality === m ? C.textOnPrimary : C.textSecondary,
-              }]}>
-                {m === "Todos" ? "Todos" : m.charAt(0).toUpperCase() + m.slice(1)}
+              <Text
+                style={[
+                  styles.chipText,
+                  {
+                    color:
+                      selectedModality === m
+                        ? C.textOnPrimary
+                        : C.textSecondary,
+                  },
+                ]}
+              >
+                {m === "Todos"
+                  ? "Todos"
+                  : m.charAt(0).toUpperCase() + m.slice(1)}
               </Text>
             </TouchableOpacity>
           ))}
@@ -163,42 +231,91 @@ export default function FeedScreen() {
       </View>
 
       {/* ── Lista de solicitudes ─────────────────────────────────────────── */}
-      <FlatList
-        data={filtered}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <CardSolicitud
-            item={item}
-            isOwnPost={item.author_id === user?.id}
-            onPress={(r) => router.push(`/solicitud/${r.id}`)}
-            onPostulate={(r) => router.push(`/postular/${r.id}`)}
-          />
-        )}
-        contentContainerStyle={[
-          styles.listContent,
-          { paddingBottom: insets.bottom + 80 }, // ✅ espacio para tab bar + home indicator
-        ]}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[C.primary]}
-            tintColor={C.primary}
-          />
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyEmoji}>🔍</Text>
-            <Text style={[styles.emptyTitle, { color: C.textPrimary }]}>
-              Sin resultados
-            </Text>
-            <Text style={[styles.emptyBody, { color: C.textSecondary }]}>
-              Intenta con otros filtros o crea la primera solicitud.
-            </Text>
-          </View>
-        }
-      />
+      {loading && !refreshing ? (
+        // Skeleton de carga inicial
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={C.primary} />
+          <Text style={[styles.loadingText, { color: C.textSecondary }]}>
+            Cargando solicitudes...
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={filtered}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <CardSolicitud
+              item={item as any}
+              isOwnPost={item.author_id === user?.id}
+              onPress={() =>
+                router.push(`/solicitud/${item.id}` as any)
+              }
+              onPostulate={() =>
+                router.push(`/postular/${item.id}` as any)
+              }
+            />
+          )}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: insets.bottom + 80 },
+          ]}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => loadFeed(true)}
+              colors={[C.primary]}
+              tintColor={C.primary}
+            />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              {error ? (
+                <>
+                  <Text style={styles.emptyEmoji}>⚠️</Text>
+                  <Text style={[styles.emptyTitle, { color: C.textPrimary }]}>
+                    Error al cargar
+                  </Text>
+                  <Text
+                    style={[styles.emptyBody, { color: C.textSecondary }]}
+                  >
+                    {error}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => loadFeed()}
+                    style={[styles.retryBtn, { backgroundColor: C.primary }]}
+                    activeOpacity={0.85}
+                  >
+                    <Text
+                      style={{
+                        color: C.textOnPrimary,
+                        fontWeight: "600",
+                        fontSize: 14,
+                      }}
+                    >
+                      Reintentar
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.emptyEmoji}>🔍</Text>
+                  <Text
+                    style={[styles.emptyTitle, { color: C.textPrimary }]}
+                  >
+                    Sin resultados
+                  </Text>
+                  <Text
+                    style={[styles.emptyBody, { color: C.textSecondary }]}
+                  >
+                    Intenta con otros filtros o crea la primera solicitud.
+                  </Text>
+                </>
+              )}
+            </View>
+          }
+        />
+      )}
 
       {/* ── Modal de filtros ─────────────────────────────────────────────── */}
       <FilterModal
@@ -206,6 +323,7 @@ export default function FeedScreen() {
         onClose={() => setShowFilters(false)}
         selectedFaculty={selectedFaculty}
         onSelectFaculty={setSelectedFaculty}
+        faculties={faculties}
         C={C}
         bottomInset={insets.bottom}
       />
@@ -215,23 +333,42 @@ export default function FeedScreen() {
 
 // ── Modal de filtros ──────────────────────────────────────────────────────────
 function FilterModal({
-  visible, onClose, selectedFaculty, onSelectFaculty, C, bottomInset,
+  visible,
+  onClose,
+  selectedFaculty,
+  onSelectFaculty,
+  faculties,
+  C,
+  bottomInset,
 }: {
   visible: boolean;
   onClose: () => void;
   selectedFaculty: string | null;
   onSelectFaculty: (f: string | null) => void;
+  faculties: string[];
   C: (typeof Colors)["light"];
   bottomInset: number;
 }) {
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <TouchableOpacity style={styles.modalOverlay} onPress={onClose} activeOpacity={1}>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent
+      onRequestClose={onClose}
+    >
+      <TouchableOpacity
+        style={styles.modalOverlay}
+        onPress={onClose}
+        activeOpacity={1}
+      >
         <View
-          style={[styles.modalSheet, {
-            backgroundColor: C.surface,
-            paddingBottom: bottomInset + 24, // ✅ respeta home indicator
-          }]}
+          style={[
+            styles.modalSheet,
+            {
+              backgroundColor: C.surface,
+              paddingBottom: bottomInset + 24,
+            },
+          ]}
           onStartShouldSetResponder={() => true}
         >
           <View style={[styles.modalHandle, { backgroundColor: C.border }]} />
@@ -239,36 +376,68 @@ function FilterModal({
             Filtrar por Facultad
           </Text>
 
+          {/* Opción "Todas" */}
           <TouchableOpacity
-            style={[styles.facultyOption, {
-              backgroundColor: !selectedFaculty ? C.primary + "15" : "transparent",
-              borderColor: !selectedFaculty ? C.primary : C.border,
-            }]}
-            onPress={() => { onSelectFaculty(null); onClose(); }}
+            style={[
+              styles.facultyOption,
+              {
+                backgroundColor: !selectedFaculty
+                  ? C.primary + "15"
+                  : "transparent",
+                borderColor: !selectedFaculty ? C.primary : C.border,
+              },
+            ]}
+            onPress={() => {
+              onSelectFaculty(null);
+              onClose();
+            }}
           >
-            <Text style={[styles.facultyOptionText, {
-              color: !selectedFaculty ? C.primary : C.textPrimary,
-            }]}>
+            <Text
+              style={[
+                styles.facultyOptionText,
+                { color: !selectedFaculty ? C.primary : C.textPrimary },
+              ]}
+            >
               Todas las facultades
             </Text>
           </TouchableOpacity>
 
-          {MOCK_FACULTIES.map((f) => (
-            <TouchableOpacity
-              key={f.id}
-              style={[styles.facultyOption, {
-                backgroundColor: selectedFaculty === f.name ? C.primary + "15" : "transparent",
-                borderColor: selectedFaculty === f.name ? C.primary : C.border,
-              }]}
-              onPress={() => { onSelectFaculty(f.name); onClose(); }}
-            >
-              <Text style={[styles.facultyOptionText, {
-                color: selectedFaculty === f.name ? C.primary : C.textPrimary,
-              }]}>
-                {f.name}
-              </Text>
-            </TouchableOpacity>
-          ))}
+          {/* Facultades dinámicas del feed */}
+          {faculties.length === 0 ? (
+            <Text style={[styles.emptyBody, { color: C.textSecondary, marginTop: 8 }]}>
+              No hay facultades disponibles.
+            </Text>
+          ) : (
+            faculties.map((f) => (
+              <TouchableOpacity
+                key={f}
+                style={[
+                  styles.facultyOption,
+                  {
+                    backgroundColor:
+                      selectedFaculty === f ? C.primary + "15" : "transparent",
+                    borderColor: selectedFaculty === f ? C.primary : C.border,
+                  },
+                ]}
+                onPress={() => {
+                  onSelectFaculty(f);
+                  onClose();
+                }}
+              >
+                <Text
+                  style={[
+                    styles.facultyOptionText,
+                    {
+                      color:
+                        selectedFaculty === f ? C.primary : C.textPrimary,
+                    },
+                  ]}
+                >
+                  {f}
+                </Text>
+              </TouchableOpacity>
+            ))
+          )}
         </View>
       </TouchableOpacity>
     </Modal>
@@ -331,11 +500,7 @@ const styles = StyleSheet.create({
   },
   filterBadgeText: { fontSize: 10, fontWeight: "700" },
 
-  // ✅ Wrapper con altura fija — garantiza que los chips siempre se vean
-  chipsWrapper: {
-    height: 52,
-    flexShrink: 0,
-  },
+  chipsWrapper: { height: 52, flexShrink: 0 },
   chipsRow: {
     paddingHorizontal: 16,
     paddingVertical: 10,
@@ -353,6 +518,14 @@ const styles = StyleSheet.create({
   },
   chipText: { fontSize: 13, fontWeight: "500" },
 
+  loadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  loadingText: { fontSize: 14 },
+
   listContent: { paddingTop: 8 },
 
   emptyContainer: {
@@ -363,6 +536,12 @@ const styles = StyleSheet.create({
   emptyEmoji: { fontSize: 40, marginBottom: 12 },
   emptyTitle: { fontSize: 18, fontWeight: "700", marginBottom: 8 },
   emptyBody: { fontSize: 14, textAlign: "center", lineHeight: 20 },
+  retryBtn: {
+    marginTop: 16,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
 
   modalOverlay: {
     flex: 1,
@@ -375,13 +554,19 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   modalHandle: {
-    width: 36, height: 4, borderRadius: 2,
-    alignSelf: "center", marginBottom: 20,
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: "center",
+    marginBottom: 20,
   },
   modalTitle: { fontSize: 17, fontWeight: "700", marginBottom: 16 },
   facultyOption: {
-    borderWidth: 1, borderRadius: 8,
-    paddingHorizontal: 14, paddingVertical: 12, marginBottom: 8,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 8,
   },
   facultyOptionText: { fontSize: 14, fontWeight: "500" },
 });
