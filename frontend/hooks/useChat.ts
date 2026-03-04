@@ -30,7 +30,7 @@ interface UseChatReturn {
   setInputText: (v: string) => void;
   sending: boolean;
   send: () => Promise<void>;
-  flatListRef: React.RefObject<FlatList<Message>>;
+  flatListRef: React.RefObject<FlatList<Message> | null>;
 }
 
 export function useChat(conversationId: string): UseChatReturn {
