@@ -24,6 +24,7 @@ export interface AuthProfile {
   full_name: string;
   avatar_url: string | null;
   bio: string | null;
+  phone_number: string | null;
   role: UserRole;
   semester: number | null;
   is_active: boolean;
@@ -40,6 +41,7 @@ export interface Profile {
   full_name: string;
   avatar_url: string | null;
   bio: string | null;
+  phone_number: string | null;
   role: UserRole;
   semester: number | null;
   is_active: boolean;
@@ -188,4 +190,33 @@ export interface Conversation {
 export interface SendMessagePayload {
   conversation_id: string;
   content: string;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// RECURSOS DE ESTUDIO — US-006
+// ══════════════════════════════════════════════════════════════════════════════
+
+export interface StudyResource {
+  id: string;
+  user_id: string;
+  program_id: string;
+  subject_id: string;
+  title: string;
+  description: string | null;
+  file_url: string;
+  file_name: string;
+  file_type: string | null; // PDF, DOCX, XLSX, etc.
+  file_size_kb: number | null;
+  created_at: string;
+  updated_at: string;
+  // joins opcionales para enriquecimiento
+  profiles?: { full_name: string; avatar_url: string | null };
+  subjects?: { name: string };
+}
+
+export interface CreateStudyResourcePayload {
+  subject_id: string;
+  title: string;
+  description?: string;
+  file_uri: string;
 }

@@ -23,6 +23,7 @@ export interface UserSession {
   email: string;
   fullName: string;
   avatarUrl?: string | null;
+  phoneNumber?: string | null;
   role: UserRole;
   semester?: number | null;
   bio?: string | null;
@@ -66,6 +67,7 @@ export const useAuthStore = create<AuthState>((set) => ({
               avatarUrl: profile?.avatar_url
                 ?? session.user.user_metadata?.avatar_url
                 ?? null,
+              phoneNumber: profile?.phone_number ?? null,
               role: (profile?.role as UserRole) ?? "estudiante",
               semester: profile?.semester ?? null,
               bio: profile?.bio ?? null,
@@ -84,6 +86,7 @@ export const useAuthStore = create<AuthState>((set) => ({
               email: session.user.email!,
               fullName: session.user.user_metadata?.full_name ?? "Estudiante",
               avatarUrl: session.user.user_metadata?.avatar_url ?? null,
+              phoneNumber: null,
               role: "estudiante",
               semester: null,
               bio: null,
@@ -117,6 +120,7 @@ export const useAuthStore = create<AuthState>((set) => ({
           email: user.email!,
           fullName: profile.full_name,
           avatarUrl: profile.avatar_url,
+          phoneNumber: profile.phone_number,
           role: profile.role as UserRole,
           semester: profile.semester,
           bio: profile.bio,

@@ -32,6 +32,7 @@ export default function PerfilScreen() {
 
   const {
     avatarUrl,
+    phoneNumber,
     userPrograms,
     userSubjects,
     myRequests,
@@ -129,6 +130,21 @@ export default function PerfilScreen() {
                     </View>
                   ))}
                 </View>
+              )}
+            </SectionCard>
+
+            {/* Contacto */}
+            <SectionCard
+              title="Contacto"
+              actionLabel="Editar"
+              onAction={() => router.push("/editar-perfil")}
+            >
+              {phoneNumber ? (
+                <InfoRow emoji="📱" label="Teléfono" value={phoneNumber} />
+              ) : (
+                <Text style={{ fontSize: 13, color: C.textPlaceholder, textAlign: "center", paddingVertical: 12 }}>
+                  Aún no has agregado un teléfono de contacto
+                </Text>
               )}
             </SectionCard>
 

@@ -2,111 +2,140 @@
  * hooks/useFeed.ts
  *
  * Encapsula TODA la lógica de datos del feed:
- * - Carga de solicitudes (con filtros de modalidad y búsqueda)
+ * - Carga de solicitudes filtradas por materias en común
  * - Pull-to-refresh
- * - Filtro local de facultad
- * - Derivación de facultades únicas
+ * - Scroll infinito (paginación)
+ * - Filtro local por materias seleccionadas
  * - Estado de carga / error
- *
- * La pantalla feed.tsx solo orquesta UI — este hook hace el trabajo pesado.
  */
 
 import {
   FeedFilters,
   FeedStudyRequest,
   getFeedRequests,
+  getEnrolledSubjectsForUser,
+  Subject as FeedSubject,
 } from "@/lib/services/studyRequestsService"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
-export const MODALITIES = ["Todos", "presencial", "virtual", "híbrido"] as const
-export type Modality = (typeof MODALITIES)[number]
+const PAGE_SIZE = 10
 
 interface UseFeedReturn {
   // Datos
   filtered: FeedStudyRequest[]
-  faculties: string[]
+  userSubjects: FeedSubject[]
   // Estado
   loading: boolean
   refreshing: boolean
+  loadingMore: boolean
   error: string | null
   // Filtros
   search: string
   setSearch: (v: string) => void
-  selectedFaculty: string | null
-  setSelectedFaculty: (v: string | null) => void
-  selectedModality: string
-  setSelectedModality: (v: string) => void
+  selectedSubjects: string[]
+  setSelectedSubjects: (v: string[]) => void
   activeFilters: number
   // Acciones
   refresh: () => void
+  loadMore: () => void
 }
 
 export function useFeed(): UseFeedReturn {
   const [requests, setRequests] = useState<FeedStudyRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [userSubjectIds, setUserSubjectIds] = useState<string[]>([])
+  const [userSubjects, setUserSubjects] = useState<FeedSubject[]>([])
 
   const [search, setSearch] = useState("")
-  const [selectedFaculty, setSelectedFaculty] = useState<string | null>(null)
-  const [selectedModality, setSelectedModality] = useState("Todos")
+  const [selectedSubjects, setSelectedSubjects] = useState<string[]>([])
+
+  const pageRef = useRef(0)
+  const hasMoreRef = useRef(true)
+
+  // Cargar materias del usuario una vez
+  useEffect(() => {
+    getEnrolledSubjectsForUser()
+      .then((subjects) => {
+        setUserSubjectIds(subjects.map((s) => s.id))
+        setUserSubjects(subjects)
+      })
+      .catch(() => {
+        setUserSubjectIds([])
+        setUserSubjects([])
+      })
+  }, [])
 
   const fetchData = useCallback(async (isRefresh = false) => {
     isRefresh ? setRefreshing(true) : setLoading(true)
     setError(null)
+    pageRef.current = 0
+    hasMoreRef.current = true
 
     try {
       const filters: FeedFilters = {
-        modality: selectedModality,
         search: search.trim(),
+        subjectIds: userSubjectIds.length > 0 ? userSubjectIds : undefined,
       }
-      const data = await getFeedRequests(filters)
+      const data = await getFeedRequests(filters, 0, PAGE_SIZE)
       setRequests(data)
+      hasMoreRef.current = data.length >= PAGE_SIZE
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Error al cargar el feed.")
     } finally {
       setLoading(false)
       setRefreshing(false)
     }
-  }, [selectedModality, search])
+  }, [search, userSubjectIds])
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  // Filtro local de facultad (sin nueva llamada al backend)
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMoreRef.current || loading) return
+    setLoadingMore(true)
+
+    try {
+      const nextPage = pageRef.current + 1
+      const filters: FeedFilters = {
+        search: search.trim(),
+        subjectIds: userSubjectIds.length > 0 ? userSubjectIds : undefined,
+      }
+      const data = await getFeedRequests(filters, nextPage, PAGE_SIZE)
+      if (data.length > 0) {
+        setRequests((prev) => [...prev, ...data])
+        pageRef.current = nextPage
+      }
+      hasMoreRef.current = data.length >= PAGE_SIZE
+    } catch {
+      // No mostrar error en paginación, silenciar
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [loadingMore, loading, search, userSubjectIds])
+
+  // Filtro local por materias seleccionadas
   const filtered = useMemo(() => {
-    if (!selectedFaculty) return requests
-    return requests.filter((r) => r.faculty_name === selectedFaculty)
-  }, [requests, selectedFaculty])
+    if (selectedSubjects.length === 0) return requests
+    return requests.filter((r) => selectedSubjects.includes(r.subject_id))
+  }, [requests, selectedSubjects])
 
-  // Facultades únicas presentes en el feed cargado
-  const faculties = useMemo(() => {
-    const seen = new Set<string>()
-    return requests
-      .map((r) => r.faculty_name)
-      .filter((name): name is string => {
-        if (!name || seen.has(name)) return false
-        seen.add(name)
-        return true
-      })
-      .sort((a, b) => a.localeCompare(b))
-  }, [requests])
-
-  const activeFilters =
-    (selectedFaculty ? 1 : 0) + (selectedModality !== "Todos" ? 1 : 0)
+  const activeFilters = selectedSubjects.length
 
   return {
     filtered,
-    faculties,
+    userSubjects,
     loading,
     refreshing,
+    loadingMore,
     error,
     search,
     setSearch,
-    selectedFaculty,
-    setSelectedFaculty,
-    selectedModality,
-    setSelectedModality,
+    selectedSubjects,
+    setSelectedSubjects,
     activeFilters,
     refresh: () => fetchData(true),
+    loadMore,
   }
 }

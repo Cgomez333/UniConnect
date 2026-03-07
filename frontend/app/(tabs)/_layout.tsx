@@ -74,7 +74,6 @@ export default function TabLayout() {
 
       {/* Ocultar del tab bar */}
       <Tabs.Screen name="feed" options={{ href: null }} />
-      <Tabs.Screen name="login" options={{ href: null }} />
       <Tabs.Screen name="register" options={{ href: null }} />
     </Tabs>
   );

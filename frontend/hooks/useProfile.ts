@@ -23,6 +23,7 @@ import { useCallback, useState } from "react"
 interface UseProfileReturn {
   // Datos
   avatarUrl: string | null
+  phoneNumber: string | null
   userPrograms: UserProgram[]
   userSubjects: UserSubject[]
   myRequests: StudyRequest[]
@@ -39,6 +40,7 @@ export function useProfile(): UseProfileReturn {
   const user = useAuthStore((s) => s.user)
 
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+  const [phoneNumber, setPhoneNumber] = useState<string | null>(null)
   const [userPrograms, setUserPrograms] = useState<UserProgram[]>([])
   const [userSubjects, setUserSubjects] = useState<UserSubject[]>([])
   const [myRequests, setMyRequests] = useState<StudyRequest[]>([])
@@ -58,6 +60,7 @@ export function useProfile(): UseProfileReturn {
             getMyRequests(user.id),
           ])
           setAvatarUrl(profile?.avatar_url ?? null)
+          setPhoneNumber(profile?.phone_number ?? null)
           setUserPrograms(progs)
           setUserSubjects(subs)
           setMyRequests(reqs)
@@ -92,6 +95,7 @@ export function useProfile(): UseProfileReturn {
 
   return {
     avatarUrl,
+    phoneNumber,
     userPrograms,
     userSubjects,
     myRequests,

@@ -1,7 +1,19 @@
 /**
  * app/editar-perfil.tsx
- * Modal para editar el perfil — US-004
- * Permite editar: nombre, programa, materias, biografía y foto de perfil
+ * 
+ * Pantalla de edición de perfil — US-004: Completar perfil público
+ * 
+ * CAMPOS EDITABLES:
+ * ✓ Foto de perfil (cambiar/capturar)
+ * ✓ Materias (agregar/remover)
+ * ✓ Biografía (max 500 caracteres)
+ * ✓ Teléfono de contacto (nuevo en Sprint 2)
+ * 
+ * CAMPOS NO EDITABLES (seguridad/diseño MVP):
+ * ✗ Nombre completo (solo en registro)
+ * ✗ Programa académico (solo gestor académico)
+ * ✗ Correo (solo via verificación)
+ * 
  * Foto: galería o cámara en tiempo real
  */
 
@@ -52,20 +64,19 @@ export default function EditarPerfilScreen() {
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
 
-  // Form state
-  const [fullName, setFullName] = useState(user?.fullName ?? "");
+  // Form state — SOLO CAMPOS EDITABLES
   const [bio, setBio] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState(user?.phoneNumber ?? "");
 
   // Avatar state
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [showAvatarOptions, setShowAvatarOptions] = useState(false);
 
-  // Program state
+  // Program state (solo lectura)
   const [allPrograms, setAllPrograms] = useState<Program[]>([]);
   const [userPrograms, setUserPrograms] = useState<UserProgram[]>([]);
   const [selectedProgramId, setSelectedProgramId] = useState<string>("");
-  const [showProgramSelector, setShowProgramSelector] = useState(false);
 
   // Subjects state
   const [allSubjects, setAllSubjects] = useState<Subject[]>([]);
@@ -83,9 +94,17 @@ export default function EditarPerfilScreen() {
 
       const profile = await getProfile(user.id);
       if (profile) {
-        setFullName(profile.full_name);
         setBio(profile.bio ?? "");
+        setPhoneNumber(profile.phone_number ?? "");
         setAvatarUri(profile.avatar_url ?? null);
+
+        // Sincronizar el store con los datos del perfil (para evitar desfases)
+        setUser({
+          ...user,
+          bio: profile.bio ?? undefined,
+          phoneNumber: profile.phone_number ?? null,
+          avatarUrl: profile.avatar_url ?? null,
+        });
       }
 
       const myPrograms = await getMyPrograms(user.id);
@@ -118,6 +137,16 @@ export default function EditarPerfilScreen() {
   useEffect(() => {
     loadInitialData();
   }, [loadInitialData]);
+
+  // Sincronizar cuando el usuario en el store cambia (ej: después de actualizar)
+  useEffect(() => {
+    if (user?.phoneNumber && !phoneNumber) {
+      setPhoneNumber(user.phoneNumber);
+    }
+    if (user?.bio && !bio) {
+      setBio(user.bio);
+    }
+  }, [user?.phoneNumber, user?.bio]);
 
   const loadAvailableSubjects = useCallback(async (programId: string) => {
     try {
@@ -191,14 +220,7 @@ export default function EditarPerfilScreen() {
     await processAndUpload(result.assets[0].uri);
   };
 
-  // ── Programa ──────────────────────────────────────────────────────────────
-  const handleAddProgram = (programId: string) => {
-    setSelectedProgramId(programId);
-    setShowProgramSelector(false);
-    loadAvailableSubjects(programId);
-  };
-
-  // ── Materias ──────────────────────────────────────────────────────────────
+  // ── Materias ──────────────────────────────────────────────────────────
   const handleToggleSubject = (subjectId: string, isSelected: boolean) => {
     if (isSelected) {
       setUserSubjects((prev) => prev.filter((s) => s !== subjectId));
@@ -207,24 +229,31 @@ export default function EditarPerfilScreen() {
     }
   };
 
+  // ── Validación del teléfono ───────────────────────────────────────────────
+  const isPhoneValid = (phone: string): boolean => {
+    if (!phone) return true; // Opcional
+    // Permitir formato: +57 3XX XXXXXXX o similares
+    return /^(\+\d{1,3})?\s?\d{7,14}$/i.test(phone.replace(/\s/g, ""));
+  };
+
   // ── Guardar ───────────────────────────────────────────────────────────────
   const handleSave = async () => {
-    if (!fullName.trim()) return;
+    if (!isPhoneValid(phoneNumber)) {
+      Alert.alert("Teléfono inválido", "Por favor ingresa un teléfono válido (ej: +57 3001234567)");
+      return;
+    }
 
     setIsLoading(true);
     try {
       if (!user?.id) return;
 
+      // Actualizar solo los campos permitidos: bio y teléfono
       await updateProfile(user.id, {
-        full_name: fullName,
         bio: bio.trim() || undefined,
+        phone_number: phoneNumber.trim() || null,
       });
 
-      const primaryProgram = userPrograms.find((p) => p.is_primary);
-      if (primaryProgram?.id !== selectedProgramId && selectedProgramId) {
-        await setPrimaryProgram(user.id, selectedProgramId);
-      }
-
+      // Actualizar materias si cambiaron
       const currentSubjects = await getMySubjects(user.id);
       const oldSubjectIds = new Set(currentSubjects.map((s) => s.subject_id));
       const newSubjectIds = new Set(userSubjects);
@@ -243,8 +272,9 @@ export default function EditarPerfilScreen() {
 
       setUser({
         ...user,
-        fullName: fullName,
         bio: bio.trim() || undefined,
+        phoneNumber: phoneNumber.trim() || undefined,
+        avatarUrl: avatarUri ?? null,
       });
 
       Alert.alert("Perfil actualizado", "Los cambios se guardaron correctamente.", [
@@ -273,6 +303,8 @@ export default function EditarPerfilScreen() {
   const programName = currentSelected
     ? `${currentSelected.name} — ${currentSelected.faculty_name}`
     : "Sin programa";
+
+  const isFormValid = bio.trim() || phoneNumber.trim();
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: C.background }]}>
@@ -315,58 +347,50 @@ export default function EditarPerfilScreen() {
           </Text>
         </View>
 
-        {/* ── Nombre ── */}
+        {/* ── Nombre (SOLO LECTURA) ── */}
         <Field label="Nombre completo" C={C}>
-          <TextInput
-            style={[styles.input, { backgroundColor: C.surface, borderColor: C.border, color: C.textPrimary }]}
-            value={fullName}
-            onChangeText={setFullName}
-            placeholder="Tu nombre completo"
-            placeholderTextColor={C.textPlaceholder}
-            autoCapitalize="words"
-          />
+          <View style={[styles.readOnlyInput, { backgroundColor: C.surface, borderColor: C.border }]}>
+            <Text style={[styles.readOnlyText, { color: C.textPrimary }]}>
+              {user?.fullName || "No disponible"}
+            </Text>
+            <Text style={[styles.readOnlyHint, { color: C.textSecondary }]}>
+              No se puede editar desde aquí
+            </Text>
+          </View>
         </Field>
 
-        {/* ── Programa ── */}
-        <Field label="Programa" C={C}>
-          <TouchableOpacity
-            style={[styles.programButton, { backgroundColor: C.surface, borderColor: C.border }]}
-            onPress={() => setShowProgramSelector(!showProgramSelector)}
-          >
-            <Text style={{ color: currentSelected ? C.textPrimary : C.textPlaceholder }}>
+        {/* ── Programa (SOLO LECTURA) ── */}
+        <Field label="Programa académico" C={C}>
+          <View style={[styles.readOnlyInput, { backgroundColor: C.surface, borderColor: C.border }]}>
+            <Text style={[styles.readOnlyText, { color: C.textPrimary }]}>
               {programName}
             </Text>
-          </TouchableOpacity>
+            <Text style={[styles.readOnlyHint, { color: C.textSecondary }]}>
+              Contacta a administración para cambiar
+            </Text>
+          </View>
+        </Field>
 
-          {showProgramSelector && (
-            <View style={[styles.programList, { backgroundColor: C.background, borderColor: C.border }]}>
-              {allPrograms.map((program) => (
-                <TouchableOpacity
-                  key={program.id}
-                  style={[
-                    styles.programItem,
-                    {
-                      borderBottomColor: C.border,
-                      backgroundColor: selectedProgramId === program.id ? C.primaryLight : C.surface,
-                    },
-                  ]}
-                  onPress={() => handleAddProgram(program.id)}
-                >
-                  <View>
-                    <Text style={[styles.programItemName, { color: C.textPrimary }]}>
-                      {program.name}
-                    </Text>
-                    <Text style={[styles.programItemFaculty, { color: C.textSecondary }]}>
-                      {program.faculty_name}
-                    </Text>
-                  </View>
-                  {selectedProgramId === program.id && (
-                    <Text style={{ color: C.primary, fontSize: 18 }}>✓</Text>
-                  )}
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
+        {/* ── Teléfono (EDITABLE) ── */}
+        <Field label="Teléfono de contacto" C={C}>
+          <Text style={[styles.inputHint, { color: C.textSecondary }]}>
+            Formato: +57 3001234567
+          </Text>
+          <TextInput
+            style={[
+              styles.input,
+              { 
+                backgroundColor: C.surface, 
+                borderColor: !isPhoneValid(phoneNumber) ? C.error : C.border, 
+                color: C.textPrimary 
+              }
+            ]}
+            value={phoneNumber}
+            onChangeText={setPhoneNumber}
+            placeholder="+57 300 1234567"
+            placeholderTextColor={C.textPlaceholder}
+            keyboardType="phone-pad"
+          />
         </Field>
 
         {/* ── Materias ── */}
@@ -435,7 +459,7 @@ export default function EditarPerfilScreen() {
 
           {showAddSubjects && !selectedProgramId && (
             <Text style={{ color: C.error, padding: 10, textAlign: "center" }}>
-              Selecciona un programa primero
+              Asigna un programa primero
             </Text>
           )}
         </Field>
@@ -460,15 +484,15 @@ export default function EditarPerfilScreen() {
 
         {/* ── Guardar ── */}
         <TouchableOpacity
-          style={[styles.saveBtn, { backgroundColor: fullName.trim() ? C.primary : C.border }]}
+          style={[styles.saveBtn, { backgroundColor: isFormValid && isPhoneValid(phoneNumber) ? C.primary : C.border }]}
           onPress={handleSave}
-          disabled={!fullName.trim() || isLoading}
+          disabled={!isFormValid || isLoading || !isPhoneValid(phoneNumber)}
           activeOpacity={0.85}
         >
           {isLoading ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={[styles.saveBtnText, { color: fullName.trim() ? C.textOnPrimary : C.textSecondary }]}>
+            <Text style={[styles.saveBtnText, { color: isFormValid && isPhoneValid(phoneNumber) ? C.textOnPrimary : C.textSecondary }]}>
               Guardar cambios
             </Text>
           )}
@@ -550,7 +574,13 @@ const styles = StyleSheet.create({
   field: { marginBottom: 20 },
   label: { fontSize: 13, fontWeight: "500", marginBottom: 8 },
   input: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 14, height: 48, fontSize: 15 },
+  inputHint: { fontSize: 12, marginBottom: 6 },
   textArea: { borderWidth: 1, borderRadius: 8, padding: 14, fontSize: 14, minHeight: 100 },
+
+  // Read-only fields
+  readOnlyInput: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 12, minHeight: 48, justifyContent: "center", opacity: 0.6 },
+  readOnlyText: { fontSize: 15, fontWeight: "500" },
+  readOnlyHint: { fontSize: 11, marginTop: 4, fontStyle: "italic" },
 
   // Avatar
   avatarContainer: { alignItems: "center", marginBottom: 28 },
@@ -587,58 +617,58 @@ const styles = StyleSheet.create({
   avatarEditIcon: { fontSize: 14 },
   avatarHint: { fontSize: 12, marginTop: 8 },
 
-  // Program selector
-  programButton: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 12, height: 48, justifyContent: "center" },
-  programList: { borderWidth: 1, borderRadius: 8, marginTop: 8, maxHeight: 300 },
-  programItem: { padding: 14, borderBottomWidth: 1, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  programItemName: { fontSize: 14, fontWeight: "600", marginBottom: 2 },
-  programItemFaculty: { fontSize: 12 },
-
   // Subjects
   button: { borderRadius: 8, paddingVertical: 12, paddingHorizontal: 14, alignItems: "center" },
   buttonText: { fontSize: 14, fontWeight: "600" },
   subjectsList: { borderWidth: 1, borderRadius: 8, padding: 8, marginTop: 10, gap: 8 },
-  subjectItem: { flexDirection: "row", borderWidth: 1, borderRadius: 6, padding: 10, justifyContent: "space-between", alignItems: "center" },
-  subjectName: { flex: 1, fontSize: 13, fontWeight: "500" },
-  subjectsSelector: { borderWidth: 1, borderRadius: 8, marginTop: 8, padding: 8, gap: 4 },
-  subjectCheckbox: { flexDirection: "row", borderWidth: 1, borderRadius: 6, padding: 12, alignItems: "center" },
+  subjectItem: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 12, paddingVertical: 8, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  subjectName: { fontSize: 14, fontWeight: "500", flex: 1 },
+  subjectsSelector: { borderWidth: 1, borderRadius: 8, marginTop: 8, maxHeight: 300 },
+  subjectCheckbox: { padding: 14, borderBottomWidth: 1, flexDirection: "row", alignItems: "center", borderBottomColor: "transparent" },
 
   // Save button
-  saveBtn: { borderRadius: 10, paddingVertical: 14, alignItems: "center", marginTop: 16 },
-  saveBtnText: { fontSize: 15, fontWeight: "700" },
+  saveBtn: { borderRadius: 8, paddingVertical: 14, paddingHorizontal: 20, alignItems: "center", justifyContent: "center", marginTop: 20 },
+  saveBtnText: { fontSize: 16, fontWeight: "600" },
 
-  // Modal opciones avatar
+  // Modal
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "flex-end",
   },
   modalSheet: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingTop: 20,
-    paddingBottom: 36,
-    paddingHorizontal: 20,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingVertical: 16,
   },
   modalTitle: {
     fontSize: 16,
-    fontWeight: "700",
-    textAlign: "center",
-    marginBottom: 16,
+    fontWeight: "600",
+    paddingHorizontal: 20,
+    paddingBottom: 12,
   },
   modalOption: {
     flexDirection: "row",
     alignItems: "center",
+    paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    gap: 14,
   },
-  modalOptionIcon: { fontSize: 22 },
-  modalOptionText: { fontSize: 15, fontWeight: "500" },
+  modalOptionIcon: {
+    fontSize: 24,
+    marginRight: 16,
+  },
+  modalOptionText: {
+    fontSize: 15,
+    flex: 1,
+  },
   modalCancel: {
-    marginTop: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
     alignItems: "center",
-    paddingVertical: 12,
   },
-  modalCancelText: { fontSize: 15 },
+  modalCancelText: {
+    fontSize: 15,
+    fontWeight: "500",
+  },
 });

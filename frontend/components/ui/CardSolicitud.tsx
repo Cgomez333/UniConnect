@@ -36,7 +36,8 @@ export function CardSolicitud({
   const C = Colors[scheme];
 
   const timeAgo = getTimeAgo(item.created_at);
-  const authorName = item.profiles?.full_name ?? "Estudiante";
+  const authorName = item.profiles?.full_name ?? (item as any).author?.full_name ?? "Estudiante";
+  const authorCareer = (item as any).author?.career ?? "";
   const initials = authorName
     .split(" ")
     .slice(0, 2)
@@ -61,7 +62,7 @@ export function CardSolicitud({
             {authorName}
           </Text>
           <Text style={[styles.authorMeta, { color: C.textSecondary }]}>
-            Estudiante · {timeAgo}
+            {authorCareer || "Estudiante"} · {timeAgo}
           </Text>
         </View>
 

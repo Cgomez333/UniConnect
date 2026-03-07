@@ -12,7 +12,6 @@
 
 import { FeedFilterModal } from "@/components/feed/FeedFilterModal";
 import { FeedHeader } from "@/components/feed/FeedHeader";
-import { ModalityChips } from "@/components/feed/ModalityChips";
 import { SearchBar } from "@/components/feed/SearchBar";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { LoadingState } from "@/components/shared/LoadingState";
@@ -23,7 +22,7 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useState } from "react";
-import { FlatList, RefreshControl, StyleSheet, useColorScheme, View } from "react-native";
+import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, useColorScheme, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function FeedScreen() {
@@ -35,18 +34,18 @@ export default function FeedScreen() {
 
   const {
     filtered,
-    faculties,
+    userSubjects,
     loading,
     refreshing,
+    loadingMore,
     error,
     search,
     setSearch,
-    selectedFaculty,
-    setSelectedFaculty,
-    selectedModality,
-    setSelectedModality,
+    selectedSubjects,
+    setSelectedSubjects,
     activeFilters,
     refresh,
+    loadMore,
   } = useFeed();
 
   return (
@@ -62,8 +61,6 @@ export default function FeedScreen() {
         activeFilters={activeFilters}
         onOpenFilters={() => setShowFilters(true)}
       />
-
-      <ModalityChips selected={selectedModality} onSelect={setSelectedModality} />
 
       {loading && !refreshing ? (
         <LoadingState message="Cargando solicitudes..." />
@@ -81,6 +78,15 @@ export default function FeedScreen() {
           )}
           contentContainerStyle={{ paddingTop: 8, paddingBottom: insets.bottom + 80 }}
           showsVerticalScrollIndicator={false}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={
+            loadingMore ? (
+              <View style={{ paddingVertical: 20 }}>
+                <ActivityIndicator size="small" color={C.primary} />
+              </View>
+            ) : null
+          }
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -112,9 +118,9 @@ export default function FeedScreen() {
       <FeedFilterModal
         visible={showFilters}
         onClose={() => setShowFilters(false)}
-        selectedFaculty={selectedFaculty}
-        onSelectFaculty={setSelectedFaculty}
-        faculties={faculties}
+        selectedSubjects={selectedSubjects}
+        onSelectSubjects={setSelectedSubjects}
+        subjects={userSubjects}
         bottomInset={insets.bottom}
       />
     </View>

@@ -52,11 +52,15 @@ export interface FeedStudyRequest {
   subject_name: string;
   faculty_name: string;
   applications_count?: number;
+  // compatibilidad con CardSolicitud que lee profiles
+  profiles?: { full_name: string; avatar_url: string | null };
 }
 
 export interface FeedFilters {
   modality?: string;
   search?: string;
+  /** IDs de materias del usuario para filtrar por materias en común */
+  subjectIds?: string[];
 }
 
 // ── Materias inscritas del estudiante ─────────────────────────────────────────
@@ -173,7 +177,14 @@ export async function getFeedRequests(
     .select(`
       id, author_id, subject_id, title, description,
       modality, max_members, status, created_at,
-      profiles ( full_name, avatar_url ),
+      profiles (
+        full_name,
+        avatar_url,
+        user_programs (
+          is_primary,
+          programs ( name )
+        )
+      ),
       subjects (
         name,
         program_subjects (
@@ -187,6 +198,11 @@ export async function getFeedRequests(
     .eq("status", "abierta")
     .order("created_at", { ascending: false })
     .range(page * pageSize, (page + 1) * pageSize - 1);
+
+  // Filtro por materias en común del usuario
+  if (filters?.subjectIds && filters.subjectIds.length > 0) {
+    query = query.in("subject_id", filters.subjectIds);
+  }
 
   // Filtro de modalidad — la BD guarda "hibrido" sin tilde
   if (filters?.modality && filters.modality !== "Todos") {
@@ -226,6 +242,23 @@ export async function getFeedRequests(
       if (fac?.name) facultyName = fac.name;
     }
 
+    // Extraer carrera del autor (programa principal)
+    let authorCareer = "";
+    const upArr: any[] = r.profiles?.user_programs ?? [];
+    for (let j = 0; j < upArr.length; j++) {
+      const up = upArr[j];
+      if (up.is_primary) {
+        const prog = Array.isArray(up.programs) ? up.programs[0] : up.programs;
+        authorCareer = prog?.name ?? "";
+        break;
+      }
+    }
+    // Si no hay programa principal, tomar el primero disponible
+    if (!authorCareer && upArr.length > 0) {
+      const prog = Array.isArray(upArr[0].programs) ? upArr[0].programs[0] : upArr[0].programs;
+      authorCareer = prog?.name ?? "";
+    }
+
     // Normalizar "hibrido" → "híbrido" para el frontend
     const rawModality: string = r.modality ?? "presencial";
     const modalityDisplay: Modality =
@@ -244,7 +277,11 @@ export async function getFeedRequests(
       author: {
         full_name: r.profiles?.full_name ?? "Usuario",
         avatar_url: r.profiles?.avatar_url ?? undefined,
-        career: undefined,
+        career: authorCareer || undefined,
+      },
+      profiles: {
+        full_name: r.profiles?.full_name ?? "Usuario",
+        avatar_url: r.profiles?.avatar_url ?? null,
       },
       subject_name: r.subjects?.name ?? "Sin materia",
       faculty_name: facultyName,

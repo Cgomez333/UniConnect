@@ -18,15 +18,39 @@ export async function getProfile(userId: string): Promise<Profile | null> {
 }
 
 // ── Actualizar perfil ─────────────────────────────────────────────────────────
+/**
+ * Actualiza campos editables del perfil del usuario.
+ * 
+ * CAMPOS EDITABLES (MVP):
+ * - bio: Biografía del usuario (max 500 caracteres)
+ * - phone_number: Teléfono de contacto (formato internacional recomendado)
+ * 
+ * CAMPOS NO EDITABLES (por seguridad/diseño MVP):
+ * - full_name: Solo se edita en registro
+ * - email: Solo se edita mediante proceso de verificación
+ * - role: Solo puede cambiar mediante auditoría/admin
+ * - program: Se gestiona separadamente con setPrimaryProgram()
+ * 
+ * @param userId    - ID del usuario autenticado
+ * @param updates   - Objeto con los campos a actualizar
+ * @throws Error si intenta actualizar campos protegidos
+ */
 export async function updateProfile(
   userId: string,
   updates: {
-    full_name?: string
     bio?: string
-    semester?: number
-    avatar_url?: string
+    phone_number?: string | null
   }
 ): Promise<Profile> {
+  // Validar que no se intenten actualizar campos protegidos
+  const protectedFields = ['full_name', 'email', 'role'];
+  const attemptedKeys = Object.keys(updates) as (keyof typeof updates)[];
+  const protectedAttempt = attemptedKeys.some((k) => protectedFields.includes(k));
+  
+  if (protectedAttempt) {
+    throw new Error('No está permitido actualizar nombre, correo o rol desde el perfil.');
+  }
+
   return apiPatch<Profile>("profiles", updates as Record<string, unknown>, (q) =>
     q.eq("id", userId)
   )
