@@ -10,7 +10,9 @@
 
 import { Colors } from "@/constants/Colors"
 import { router } from "expo-router"
-import { Image, StyleSheet, Text, TouchableOpacity, useColorScheme, View } from "react-native"
+import * as Haptics from "expo-haptics"
+import { useRef } from "react"
+import { Animated, Image, Pressable, StyleSheet, Text, TouchableOpacity, useColorScheme, View } from "react-native"
 
 interface Props {
   fullName: string
@@ -31,6 +33,15 @@ export function ProfileHero({
 }: Props) {
   const scheme = useColorScheme() ?? "light"
   const C = Colors[scheme]
+  const avatarScale = useRef(new Animated.Value(1)).current
+
+  const handleAvatarPress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    Animated.sequence([
+      Animated.spring(avatarScale, { toValue: 1.12, speed: 30, bounciness: 10, useNativeDriver: true }),
+      Animated.spring(avatarScale, { toValue: 1, speed: 20, bounciness: 6, useNativeDriver: true }),
+    ]).start()
+  }
 
   return (
     <View
@@ -43,21 +54,25 @@ export function ProfileHero({
       <View style={[styles.topBar, { backgroundColor: C.primary }]} />
 
       {/* Avatar */}
-      {avatarUrl ? (
-        <Image
-          source={{ uri: avatarUrl }}
-          style={[styles.avatar, { borderColor: C.surface }]}
-        />
-      ) : (
-        <View
-          style={[
-            styles.avatar,
-            { backgroundColor: C.primary, borderColor: C.surface },
-          ]}
-        >
-          <Text style={styles.avatarInitials}>{initials}</Text>
-        </View>
-      )}
+      <Pressable onPress={handleAvatarPress}>
+        <Animated.View style={{ transform: [{ scale: avatarScale }] }}>
+          {avatarUrl ? (
+            <Image
+              source={{ uri: avatarUrl }}
+              style={[styles.avatar, { borderColor: C.surface }]}
+            />
+          ) : (
+            <View
+              style={[
+                styles.avatar,
+                { backgroundColor: C.primary, borderColor: C.surface },
+              ]}
+            >
+              <Text style={styles.avatarInitials}>{initials}</Text>
+            </View>
+          )}
+        </Animated.View>
+      </Pressable>
 
       <View style={[styles.goldAccent, { backgroundColor: C.accent }]} />
 

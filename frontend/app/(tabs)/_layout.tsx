@@ -4,9 +4,30 @@
  */
 
 import { Colors } from "@/constants/Colors";
+import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
-import { Text, useColorScheme } from "react-native";
+import { useRef, useEffect } from "react";
+import { Animated, useColorScheme } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+function AnimatedTabIcon({ name, color, focused }: { name: any; color: string; focused: boolean }) {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.spring(scale, {
+      toValue: focused ? 1.2 : 1,
+      useNativeDriver: true,
+      speed: 20,
+      bounciness: 10,
+    }).start();
+  }, [focused]);
+
+  return (
+    <Animated.View style={{ transform: [{ scale }] }}>
+      <Ionicons name={name} size={22} color={color} />
+    </Animated.View>
+  );
+}
 
 export default function TabLayout() {
   const scheme = useColorScheme() ?? "light";
@@ -39,8 +60,8 @@ export default function TabLayout() {
         name="index"
         options={{
           title: "Feed",
-          tabBarIcon: ({ color }) => (
-            <Text style={{ fontSize: 20, color }}>🏠</Text>
+          tabBarIcon: ({ color, focused }) => (
+            <AnimatedTabIcon name={focused ? "home" : "home-outline"} color={color} focused={focused} />
           ),
         }}
       />
@@ -48,8 +69,8 @@ export default function TabLayout() {
         name="invitaciones"
         options={{
           title: "Solicitudes",
-          tabBarIcon: ({ color }) => (
-            <Text style={{ fontSize: 20, color }}>🔔</Text>
+          tabBarIcon: ({ color, focused }) => (
+            <AnimatedTabIcon name={focused ? "notifications" : "notifications-outline"} color={color} focused={focused} />
           ),
         }}
       />
@@ -57,8 +78,8 @@ export default function TabLayout() {
         name="mensajes"
         options={{
           title: "Mensajes",
-          tabBarIcon: ({ color }) => (
-            <Text style={{ fontSize: 20, color }}>💬</Text>
+          tabBarIcon: ({ color, focused }) => (
+            <AnimatedTabIcon name={focused ? "chatbubble" : "chatbubble-outline"} color={color} focused={focused} />
           ),
         }}
       />
@@ -66,8 +87,8 @@ export default function TabLayout() {
         name="perfil"
         options={{
           title: "Perfil",
-          tabBarIcon: ({ color }) => (
-            <Text style={{ fontSize: 20, color }}>👤</Text>
+          tabBarIcon: ({ color, focused }) => (
+            <AnimatedTabIcon name={focused ? "person" : "person-outline"} color={color} focused={focused} />
           ),
         }}
       />

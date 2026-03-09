@@ -61,15 +61,15 @@ export default function OnboardingScreen() {
     <View style={[styles.container, { backgroundColor: C.background }]}>
       <StatusBar style={scheme === "dark" ? "light" : "dark"} />
 
-      {!isLast && (
+      <View style={[styles.skipBtn, { opacity: isLast ? 0 : 1 }]}
+            pointerEvents={isLast ? "none" : "auto"}>
         <TouchableOpacity
-          style={styles.skipBtn}
           onPress={() => router.replace("/login" as any)}
           activeOpacity={0.7}
         >
           <Text style={[styles.skipText, { color: C.textSecondary }]}>Saltar</Text>
         </TouchableOpacity>
-      )}
+      </View>
 
       <FlatList
         ref={flatRef}
