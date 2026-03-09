@@ -61,10 +61,12 @@ export default function EditarPerfilScreen() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [showAvatarOptions, setShowAvatarOptions] = useState(false);
 
-  // Program state (solo lectura)
+  // Program state
   const [allPrograms, setAllPrograms] = useState<Program[]>([]);
   const [userPrograms, setUserPrograms] = useState<UserProgram[]>([]);
   const [selectedProgramId, setSelectedProgramId] = useState<string>("");
+  const [originalProgramId, setOriginalProgramId] = useState<string>("");
+  const [showProgramSelector, setShowProgramSelector] = useState(false);
 
   // Subjects state
   const [allSubjects, setAllSubjects] = useState<Subject[]>([]);
@@ -107,6 +109,7 @@ export default function EditarPerfilScreen() {
       const primaryProgram = programsList.find((p) => p.is_primary);
       if (primaryProgram) {
         setSelectedProgramId(primaryProgram.id);
+        setOriginalProgramId(primaryProgram.id);
       }
 
       const mySubjects = await getMySubjects(user.id);
@@ -241,6 +244,18 @@ export default function EditarPerfilScreen() {
         phone_number: phoneNumber.trim() || null,
       });
 
+      // Actualizar programa si cambió
+      if (selectedProgramId && selectedProgramId !== originalProgramId) {
+        await setPrimaryProgram(user.id, selectedProgramId);
+        setOriginalProgramId(selectedProgramId);
+        // Limpiar materias porque cambia el programa base
+        const currentSubjects = await getMySubjects(user.id);
+        for (const s of currentSubjects) {
+          await removeMySubject(user.id, s.subject_id);
+        }
+        setUserSubjects([]);
+      }
+
       // Actualizar materias si cambiaron
       const currentSubjects = await getMySubjects(user.id);
       const oldSubjectIds = new Set(currentSubjects.map((s) => s.subject_id));
@@ -286,11 +301,6 @@ export default function EditarPerfilScreen() {
       </SafeAreaView>
     );
   }
-
-  const currentSelected = allPrograms.find((p) => p.id === selectedProgramId);
-  const programName = currentSelected
-    ? `${currentSelected.name} — ${currentSelected.faculty_name}`
-    : "Sin programa";
 
   const isFormValid = bio.trim() || phoneNumber.trim();
 
@@ -347,16 +357,56 @@ export default function EditarPerfilScreen() {
           </View>
         </Field>
 
-        {/* ── Programa (SOLO LECTURA) ── */}
+        {/* ── Programa (EDITABLE) ── */}
         <Field label="Programa académico" C={C}>
-          <View style={[styles.readOnlyInput, { backgroundColor: C.surface, borderColor: C.border }]}>
+          <TouchableOpacity
+            style={[
+              styles.readOnlyInput,
+              { backgroundColor: C.surface, borderColor: showProgramSelector ? C.primary : C.border },
+            ]}
+            onPress={() => setShowProgramSelector((v) => !v)}
+            activeOpacity={0.8}
+          >
             <Text style={[styles.readOnlyText, { color: C.textPrimary }]}>
-              {programName}
+              {allPrograms.find((p) => p.id === selectedProgramId)
+                ? `${allPrograms.find((p) => p.id === selectedProgramId)!.name}`
+                : "Selecciona tu programa"}
             </Text>
             <Text style={[styles.readOnlyHint, { color: C.textSecondary }]}>
-              Contacta a administración para cambiar
+              {showProgramSelector ? "Toca para cerrar" : "Toca para cambiar"}
             </Text>
-          </View>
+          </TouchableOpacity>
+
+          {showProgramSelector && (
+            <View style={[styles.subjectsSelector, { backgroundColor: C.surface, borderColor: C.border, marginTop: 8 }]}>
+              {allPrograms.map((p) => (
+                <TouchableOpacity
+                  key={p.id}
+                  style={[
+                    styles.subjectCheckbox,
+                    {
+                      backgroundColor: selectedProgramId === p.id ? C.primary + "18" : "transparent",
+                      borderColor: C.border,
+                    },
+                  ]}
+                  onPress={() => {
+                    setSelectedProgramId(p.id);
+                    setShowProgramSelector(false);
+                    setUserSubjects([]);
+                    setAllSubjects([]);
+                  }}
+                >
+                  <Text style={{ color: selectedProgramId === p.id ? C.primary : C.textPrimary, fontSize: 18, marginRight: 10 }}>
+                    {selectedProgramId === p.id ? "✓" : "○"}
+                  </Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[{ color: C.textPrimary, fontWeight: selectedProgramId === p.id ? "600" : "400" }]}>{p.name}</Text>
+                    <Text style={{ color: C.textSecondary, fontSize: 12 }}>{(p as any).faculty_name}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
         </Field>
 
         {/* ── Teléfono (EDITABLE) ── */}
