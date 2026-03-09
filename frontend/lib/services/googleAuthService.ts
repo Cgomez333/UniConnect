@@ -79,6 +79,7 @@ export function useGoogleAuth() {
           redirectTo: redirectUrl,
           queryParams: {
             hd: ALLOWED_DOMAIN,
+            prompt: "select_account",
           },
           skipBrowserRedirect: true,
         },
