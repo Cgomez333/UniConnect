@@ -5,7 +5,10 @@
 
 import { Colors } from "@/constants/Colors";
 import { StudyRequest } from "@/types";
+import * as Haptics from "expo-haptics";
+import { useEffect, useRef } from "react";
 import {
+    Animated,
     StyleSheet,
     Text,
     TouchableOpacity,
@@ -35,6 +38,17 @@ export function CardSolicitud({
   const scheme = useColorScheme() ?? "light";
   const C = Colors[scheme];
 
+  // Animación de entrada
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(16)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, { toValue: 1, duration: 280, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: 0, duration: 280, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
   const timeAgo = getTimeAgo(item.created_at);
   const authorName = item.profiles?.full_name ?? (item as any).author?.full_name ?? "Estudiante";
   const authorCareer = (item as any).author?.career ?? "";
@@ -46,6 +60,7 @@ export function CardSolicitud({
     .toUpperCase();
 
   return (
+    <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
     <TouchableOpacity
       style={[styles.card, { backgroundColor: C.surface, borderColor: C.border }]}
       onPress={() => onPress(item)}
@@ -106,7 +121,10 @@ export function CardSolicitud({
         {!isOwnPost && item.status === "abierta" && (
           <TouchableOpacity
             style={[styles.postulateBtn, { backgroundColor: C.primary }]}
-            onPress={() => onPostulate?.(item)}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              onPostulate?.(item);
+            }}
             activeOpacity={0.85}
           >
             <Text style={[styles.postulateBtnText, { color: C.textOnPrimary }]}>
@@ -122,6 +140,7 @@ export function CardSolicitud({
         )}
       </View>
     </TouchableOpacity>
+    </Animated.View>
   );
 }
 
@@ -129,6 +148,7 @@ export function CardSolicitud({
 function getTimeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "ahora mismo";
   if (mins < 60) return `hace ${mins}m`;
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `hace ${hrs}h`;

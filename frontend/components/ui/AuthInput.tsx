@@ -40,7 +40,7 @@ export function AuthInput({
 
   return (
     <View style={styles.wrapper}>
-      <Text style={[styles.label, { color: C.textSecondary }]}>{label}</Text>
+      <Text style={[styles.label, { color: isFocused ? C.borderFocus : C.textSecondary }]}>{label}</Text>
 
       <View
         style={[

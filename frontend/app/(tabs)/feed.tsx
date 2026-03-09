@@ -79,7 +79,7 @@ export default function FeedScreen() {
     <View style={[styles.container, { backgroundColor: C.background, paddingTop: insets.top }]}>
       <StatusBar style={scheme === "dark" ? "light" : "dark"} />
 
-      <FeedHeader count={filtered.length} loading={loading} />
+      <FeedHeader count={filtered.length} loading={loading} mode={searchMode} />
 
       {/* Toggle de modo de búsqueda */}
       <SearchModeToggle mode={searchMode} onChangeMode={setSearchMode} />

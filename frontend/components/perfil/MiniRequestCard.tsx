@@ -9,6 +9,12 @@ import { StudyRequest } from "@/types"
 import { router } from "expo-router"
 import { StyleSheet, Text, TouchableOpacity, useColorScheme, View } from "react-native"
 
+const MODALITY_LABEL: Record<string, string> = {
+  presencial: "📍 Presencial",
+  virtual: "💻 Virtual",
+  híbrido: "🔄 Híbrido",
+}
+
 interface Props {
   request: StudyRequest
 }
@@ -29,7 +35,9 @@ export function MiniRequestCard({ request }: Props) {
         </Text>
       </View>
       <Text style={[styles.title, { color: C.textPrimary }]}>{request.title}</Text>
-      <Text style={[styles.meta, { color: C.textSecondary }]}>{request.modality}</Text>
+      <Text style={[styles.meta, { color: C.textSecondary }]}>
+        {MODALITY_LABEL[request.modality] ?? request.modality}
+      </Text>
     </TouchableOpacity>
   )
 }
