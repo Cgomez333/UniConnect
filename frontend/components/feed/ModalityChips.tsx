@@ -5,7 +5,8 @@
  */
 
 import { Colors } from "@/constants/Colors"
-import { MODALITIES } from "@/hooks/useFeed"
+
+const MODALITIES = ["Presencial", "Virtual", "Híbrido"]
 import { ScrollView, StyleSheet, Text, TouchableOpacity, useColorScheme, View } from "react-native"
 
 interface Props {
@@ -24,7 +25,7 @@ export function ModalityChips({ selected, onSelect }: Props) {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.row}
       >
-        {MODALITIES.map((m) => {
+        {MODALITIES.map((m: string) => {
           const isActive = selected === m
           return (
             <TouchableOpacity
