@@ -14,8 +14,9 @@ export default function IndexScreen() {
 
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const isHydrating = useAuthStore((s) => s.isHydrating);
-  const user = useAuthStore((s) => s.user);
+  const role = useAuthStore((s) => s.user?.role);
   const [ready, setReady] = useState(false);
+  const [routed, setRouted] = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => setReady(true), 50);
@@ -23,10 +24,11 @@ export default function IndexScreen() {
   }, []);
 
   useEffect(() => {
-    if (!ready || isHydrating) return;
+    if (!ready || isHydrating || routed) return;
 
-    if (isAuthenticated && user) {
-      if (user.role === "admin") {
+    if (isAuthenticated) {
+      setRouted(true);
+      if (role === "admin") {
         router.replace("/(admin)" as any);
       } else {
         router.replace("/(tabs)" as any);
@@ -34,8 +36,9 @@ export default function IndexScreen() {
       return;
     }
 
+    setRouted(true);
     router.replace("/onboarding" as any);
-  }, [ready, isHydrating, isAuthenticated, user]);
+  }, [ready, isHydrating, isAuthenticated, role, routed]);
 
   return (
     <View style={[styles.container, { backgroundColor: C.background }]}>

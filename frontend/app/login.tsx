@@ -1,6 +1,6 @@
 import { Link, router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -38,6 +38,7 @@ export default function LoginScreen() {
   const [emailError, setEmailError] = useState("");
   const [formError, setFormError] = useState("");
   const [splashRole, setSplashRole] = useState<UserRole | null>(null);
+  const hasNavigated = useRef(false);
 
   const {
     loading: googleLoading,
@@ -46,11 +47,12 @@ export default function LoginScreen() {
   } = useGoogleAuth();
 
   useEffect(() => {
-    if (!isAuthenticated || !user) return;
+    if (!isAuthenticated || !user || hasNavigated.current) return;
 
     const role = user.role ?? "estudiante";
     setSplashRole(role);
 
+    hasNavigated.current = true;
     const timeout = setTimeout(() => {
       if (role === "admin") {
         router.replace("/(admin)" as any);

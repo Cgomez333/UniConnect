@@ -86,14 +86,6 @@ export default function EditarPerfilScreen() {
         setBio(profile.bio ?? "");
         setPhoneNumber(profile.phone_number ?? "");
         setAvatarUri(profile.avatar_url ?? null);
-
-        // Sincronizar el store con los datos del perfil (para evitar desfases)
-        setUser({
-          ...user,
-          bio: profile.bio ?? undefined,
-          phoneNumber: profile.phone_number ?? null,
-          avatarUrl: profile.avatar_url ?? null,
-        });
       }
 
       const myPrograms = await getMyPrograms(user.id);
@@ -126,16 +118,6 @@ export default function EditarPerfilScreen() {
   useEffect(() => {
     loadInitialData();
   }, [loadInitialData]);
-
-  // Sincronizar cuando el usuario en el store cambia (ej: después de actualizar)
-  useEffect(() => {
-    if (user?.phoneNumber && !phoneNumber) {
-      setPhoneNumber(user.phoneNumber);
-    }
-    if (user?.bio && !bio) {
-      setBio(user.bio);
-    }
-  }, [user?.phoneNumber, user?.bio]);
 
   const loadAvailableSubjects = useCallback(async (programId: string) => {
     try {
@@ -363,45 +345,18 @@ export default function EditarPerfilScreen() {
           </View>
         </Field>
 
-        {/* ── Programa (EDITABLE) ── */}
+        {/* ── Programa (SOLO LECTURA) ── */}
         <Field label="Programa académico" C={C}>
-          <TouchableOpacity
-            style={[styles.selectorBtn, { backgroundColor: C.surface, borderColor: C.border }]}
-            onPress={() => setShowProgramSelector((v) => !v)}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.selectorBtnText, { color: selectedProgramId ? C.textPrimary : C.textPlaceholder }]}>
-              {allPrograms.find((p) => p.id === selectedProgramId)
-                ? `${allPrograms.find((p) => p.id === selectedProgramId)!.name} — ${allPrograms.find((p) => p.id === selectedProgramId)!.faculty_name}`
-                : "Selecciona tu programa"}
+          <View style={[styles.readOnlyInput, { backgroundColor: C.surface, borderColor: C.border }]}>
+            <Text style={[styles.readOnlyText, { color: C.textPrimary }]}>
+              {userPrograms.find((p) => p.is_primary)
+                ? `${userPrograms.find((p) => p.is_primary)!.name} — ${userPrograms.find((p) => p.is_primary)!.faculty_name}`
+                : "Sin programa asignado"}
             </Text>
-            <Text style={{ color: C.textSecondary }}>▾</Text>
-          </TouchableOpacity>
-
-          {showProgramSelector && (
-            <View style={[styles.programList, { backgroundColor: C.surface, borderColor: C.border }]}>
-              {allPrograms.map((p) => (
-                <TouchableOpacity
-                  key={p.id}
-                  style={[
-                    styles.programOption,
-                    { borderBottomColor: C.border },
-                    selectedProgramId === p.id && { backgroundColor: C.primary + "18" },
-                  ]}
-                  onPress={() => handleSelectProgram(p.id)}
-                  activeOpacity={0.8}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={[{ fontSize: 14, fontWeight: "500" }, { color: C.textPrimary }]}>{p.name}</Text>
-                    <Text style={[{ fontSize: 12, marginTop: 1 }, { color: C.textSecondary }]}>{p.faculty_name}</Text>
-                  </View>
-                  {selectedProgramId === p.id && (
-                    <Text style={{ color: C.primary, fontSize: 16 }}>✓</Text>
-                  )}
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
+            <Text style={[styles.readOnlyHint, { color: C.textSecondary }]}>
+              No se puede editar desde aquí
+            </Text>
+          </View>
         </Field>
 
         {/* ── Teléfono (EDITABLE) ── */}
