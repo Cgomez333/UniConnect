@@ -3,11 +3,6 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
 
-/**
- * OAuth redirect handler screen.
- * Waits for authentication state to hydrate after OAuth callback,
- * then routes to appropriate screen based on role.
- */
 export default function OAuthCallbackScreen() {
   const isHydrating = useAuthStore((s) => s.isHydrating);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);

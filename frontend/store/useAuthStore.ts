@@ -11,9 +11,6 @@ import { create } from "zustand";
 
 export type UserRole = "estudiante" | "admin";
 
-/**
- * Represents the authenticated user session with profile information.
- */
 export interface UserSession {
   id: string;
   email: string;
@@ -25,9 +22,6 @@ export interface UserSession {
   bio?: string | null;
 }
 
-/**
- * Global authentication state interface.
- */
 interface AuthState {
   user: UserSession | null;
   isLoading: boolean;
@@ -41,13 +35,6 @@ interface AuthState {
   initialize: () => () => void;
 }
 
-/**
- * Authentication store for managing user session state.
- * Integrates with Supabase Auth for email/password and OAuth flows.
- * 
- * @example
- * const { user, signIn, initialize } = useAuthStore();
- */
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   isLoading: false,
@@ -57,10 +44,6 @@ export const useAuthStore = create<AuthState>((set) => ({
   setUser: (user) => set({ user, isAuthenticated: !!user }),
 
   initialize: () => {
-    /**
-     * Processes Supabase auth session and validates @ucaldas.edu.co domain.
-     * Fetches full user profile asynchronously for non-blocking auth flow.
-     */
     const processSession = async (session: any) => {
       if (session?.user) {
         try {

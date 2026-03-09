@@ -8,10 +8,6 @@ WebBrowser.maybeCompleteAuthSession()
 
 const ALLOWED_DOMAIN = "ucaldas.edu.co"
 
-/**
- * Generates the appropriate OAuth redirect URL based on app environment.
- * Uses exp:// for Expo Go and custom scheme for native builds.
- */
 function getOAuthRedirectUrl() {
   // In Expo Go/guest, use direct exp:// deep link.
   if (Constants.appOwnership === "expo" || Constants.appOwnership === "guest") {
@@ -25,12 +21,6 @@ function getOAuthRedirectUrl() {
   })
 }
 
-/**
- * Hook for managing Google OAuth authentication flow via Supabase.
- * Enforces @ucaldas.edu.co domain restriction.
- * 
- * @returns {{loading: boolean, error: string | null, signInWithGoogle: () => Promise<void>}}
- */
 export function useGoogleAuth() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -105,9 +95,6 @@ export function useGoogleAuth() {
   return { loading, error, signInWithGoogle }
 }
 
-/**
- * Extracts query parameters from URL.
- */
 function extractQueryParams(url: string): Record<string, string> {
   const params: Record<string, string> = {}
   const questionIndex = url.indexOf("?")
@@ -126,9 +113,6 @@ function extractQueryParams(url: string): Record<string, string> {
   return params
 }
 
-/**
- * Extracts hash fragment parameters from URL.
- */
 function extractHashParams(url: string): Record<string, string> {
   const params: Record<string, string> = {}
   const hashIndex = url.indexOf("#")

@@ -24,10 +24,6 @@ import { useAuthStore } from "@/store/useAuthStore";
 
 const UCALDAS_REGEX = /^[a-zA-Z0-9._%+-]+@ucaldas\.edu\.co$/;
 
-/**
- * Main login screen supporting email/password and Google OAuth flows.
- * Validates @ucaldas.edu.co domain and handles role-based navigation.
- */
 export default function LoginScreen() {
   const scheme = useColorScheme() ?? "light";
   const C = Colors[scheme];
@@ -129,7 +125,6 @@ export default function LoginScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Logo ── */}
         <View style={styles.header}>
           <View style={[styles.logoBox, { borderColor: C.primary }]}>
             <Text style={[styles.logoText, { color: C.primary }]}>UC</Text>
@@ -141,7 +136,6 @@ export default function LoginScreen() {
           </Text>
         </View>
 
-        {/* ── Card ── */}
         <View style={[styles.card, { backgroundColor: C.surface }]}>
           <Text style={[styles.cardTitle, { color: C.textPrimary }]}>
             Inicia sesión
@@ -166,12 +160,6 @@ export default function LoginScreen() {
             isPassword
           />
 
-          <TouchableOpacity style={styles.forgotBtn} activeOpacity={0.7}>
-            <Text style={[styles.forgotText, { color: C.primary }]}>
-              ¿Olvidaste tu contraseña?
-            </Text>
-          </TouchableOpacity>
-
           <PrimaryButton
             label="Ingresar"
             onPress={handleLogin}
@@ -180,7 +168,6 @@ export default function LoginScreen() {
             style={styles.submitBtn}
           />
 
-          {/* ── Divider ── */}
           <View style={styles.divider}>
             <View style={[styles.dividerLine, { backgroundColor: C.border }]} />
             <Text style={[styles.dividerText, { color: C.textPlaceholder }]}>
@@ -189,7 +176,6 @@ export default function LoginScreen() {
             <View style={[styles.dividerLine, { backgroundColor: C.border }]} />
           </View>
 
-          {/* ── Botón Google ── */}
           {googleError ? (
             <Text style={[styles.googleError, { color: C.error }]}>
               {googleError}
@@ -223,7 +209,6 @@ export default function LoginScreen() {
             )}
           </TouchableOpacity>
 
-          {/* ── Registro ── */}
           <View style={[styles.registerRow, { marginTop: 20 }]}>
             <Text style={[styles.registerText, { color: C.textSecondary }]}>
               ¿No tienes cuenta?{" "}
@@ -238,9 +223,6 @@ export default function LoginScreen() {
           </View>
         </View>
 
-        <Text style={[styles.footer, { color: C.textPlaceholder }]}>
-          Solo accesible con correo @ucaldas.edu.co
-        </Text>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -274,8 +256,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06, shadowRadius: 12, elevation: 3,
   },
   cardTitle: { fontSize: 20, fontWeight: "700", marginBottom: 20 },
-  forgotBtn: { alignSelf: "flex-end", marginBottom: 4, marginTop: -8 },
-  forgotText: { fontSize: 13, fontWeight: "500" },
   submitBtn: { marginTop: 16 },
   divider: { flexDirection: "row", alignItems: "center", marginVertical: 20 },
   dividerLine: { flex: 1, height: 1 },
