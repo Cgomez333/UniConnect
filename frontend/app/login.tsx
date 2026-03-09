@@ -1,12 +1,6 @@
-/**
- * app/login.tsx
- * Login con splash diferenciado por rol y redirección robusta
- * Incluye autenticación con Google (@ucaldas.edu.co)
- */
-
 import { Link, router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -30,12 +24,18 @@ import { useAuthStore } from "@/store/useAuthStore";
 
 const UCALDAS_REGEX = /^[a-zA-Z0-9._%+-]+@ucaldas\.edu\.co$/;
 
+/**
+ * Main login screen supporting email/password and Google OAuth flows.
+ * Validates @ucaldas.edu.co domain and handles role-based navigation.
+ */
 export default function LoginScreen() {
   const scheme = useColorScheme() ?? "light";
   const C = Colors[scheme];
 
   const signIn = useAuthStore((s) => s.signIn);
   const isLoading = useAuthStore((s) => s.isLoading);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const user = useAuthStore((s) => s.user);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -43,15 +43,29 @@ export default function LoginScreen() {
   const [formError, setFormError] = useState("");
   const [splashRole, setSplashRole] = useState<UserRole | null>(null);
 
-  // ── Google Auth ─────────────────────────────────────────────────────────────
   const {
-    request: googleRequest,
     loading: googleLoading,
     error: googleError,
     signInWithGoogle,
   } = useGoogleAuth();
 
-  // ── Login con email/password ────────────────────────────────────────────────
+  useEffect(() => {
+    if (!isAuthenticated || !user) return;
+
+    const role = user.role ?? "estudiante";
+    setSplashRole(role);
+
+    const timeout = setTimeout(() => {
+      if (role === "admin") {
+        router.replace("/(admin)" as any);
+      } else {
+        router.replace("/(tabs)" as any);
+      }
+    }, 700);
+
+    return () => clearTimeout(timeout);
+  }, [isAuthenticated, user]);
+
   const handleEmailChange = (value: string) => {
     setEmail(value);
     setEmailError(
@@ -75,17 +89,6 @@ export default function LoginScreen() {
     try {
       await signIn(email, password);
 
-      const role = useAuthStore.getState().user?.role ?? "estudiante";
-      setSplashRole(role);
-
-      setTimeout(() => {
-        if (role === "admin") {
-          router.replace("/(admin)" as any);
-        } else {
-          router.replace("/(tabs)" as any);
-        }
-      }, 1200);
-
     } catch (error: any) {
       setSplashRole(null);
       const msg: string = error?.message ?? "";
@@ -99,7 +102,6 @@ export default function LoginScreen() {
     }
   };
 
-  // ── Splash mientras navega ──────────────────────────────────────────────────
   if (splashRole !== null) {
     return (
       <SplashLoader
@@ -198,10 +200,10 @@ export default function LoginScreen() {
             style={[
               styles.googleBtn,
               { borderColor: C.border, backgroundColor: C.surface },
-              (!googleRequest || googleLoading) && styles.googleBtnDisabled,
+              googleLoading && styles.googleBtnDisabled,
             ]}
             onPress={signInWithGoogle}
-            disabled={!googleRequest || googleLoading}
+            disabled={googleLoading}
             activeOpacity={0.85}
           >
             {googleLoading ? (

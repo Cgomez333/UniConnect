@@ -1,103 +1,144 @@
-/**
- * lib/services/googleAuthService.ts
- * Autenticación con Google — integrado con Supabase
- * Restringe el acceso exclusivamente a cuentas @ucaldas.edu.co
- */
-
 import { supabase } from "@/lib/supabase"
-import * as AuthSession from "expo-auth-session"
-import * as Google from "expo-auth-session/providers/google"
-import { router } from "expo-router"
+import { useCallback, useState } from "react"
 import * as WebBrowser from "expo-web-browser"
-import { useEffect, useState } from "react"
+import * as AuthSession from "expo-auth-session"
+import Constants from "expo-constants"
 
 WebBrowser.maybeCompleteAuthSession()
 
 const ALLOWED_DOMAIN = "ucaldas.edu.co"
 
-// Al no pasarle configuración, Expo genera la URI automáticamente 
-// basada en el entorno (Web, Expo Go o Nativo).
-const REDIRECT_URI = AuthSession.makeRedirectUri();
+/**
+ * Generates the appropriate OAuth redirect URL based on app environment.
+ * Uses exp:// for Expo Go and custom scheme for native builds.
+ */
+function getOAuthRedirectUrl() {
+  // In Expo Go/guest, use direct exp:// deep link.
+  if (Constants.appOwnership === "expo" || Constants.appOwnership === "guest") {
+    return AuthSession.makeRedirectUri({ path: "oauth-callback" })
+  }
 
+  // Native builds use the app scheme.
+  return AuthSession.makeRedirectUri({
+    scheme: "com.juanse108.uniconnet",
+    path: "oauth-callback",
+  })
+}
+
+/**
+ * Hook for managing Google OAuth authentication flow via Supabase.
+ * Enforces @ucaldas.edu.co domain restriction.
+ * 
+ * @returns {{loading: boolean, error: string | null, signInWithGoogle: () => Promise<void>}}
+ */
 export function useGoogleAuth() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const webClientId = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB
-  const iosClientId = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS
-  const androidClientId = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID
-
-  const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
-    clientId: webClientId,
-    webClientId,
-    androidClientId,
-    iosClientId,
-    redirectUri: REDIRECT_URI,
-    extraParams: {
-      hd: ALLOWED_DOMAIN,
-    },
-  })
-
-  useEffect(() => {
-    if (response?.type === "success") {
-      const token = response.params?.id_token || response.authentication?.idToken
-      handleGoogleSuccess(token)
-    } else if (response?.type === "error") {
-      setLoading(false)
-      setError("Error en la autenticación con Google")
-    } else if (response?.type === "cancel" || response?.type === "dismiss") {
-      setLoading(false)
-      setError("Inicio de sesión cancelado")
-    }
-  }, [response])
-
-  const handleGoogleSuccess = async (idToken?: string) => {
-    if (!idToken) {
-      setError("No se recibió el token de Google")
-      setLoading(false)
-      return
-    }
-
-    setLoading(true)
-    setError(null)
-
+  const createSessionFromUrl = useCallback(async (url: string) => {
     try {
-      // 1. Crear sesión en Supabase con el idToken de Google
-      const { data, error: supabaseError } = await supabase.auth.signInWithIdToken({
-        provider: "google",
-        token: idToken,
-      })
+      const queryParams = extractQueryParams(url)
+      const hashParams = extractHashParams(url)
 
-      if (supabaseError) throw supabaseError
+      if (queryParams.code) {
+        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(queryParams.code)
+        if (exchangeError) throw exchangeError
 
-      // 2. Validar dominio institucional (segunda capa de seguridad)
-      if (data.user && !data.user.email?.endsWith(`@${ALLOWED_DOMAIN}`)) {
-        await supabase.auth.signOut()
-        setError("Solo se permiten cuentas @ucaldas.edu.co")
+        setLoading(false)
         return
       }
 
-      // 3. Redirección exitosa al Feed/Tabs
-      setTimeout(() => {
-        router.replace("/(tabs)" as any)
-      }, 500)
+      if (hashParams.access_token && hashParams.refresh_token) {
+        const { error: sessionError } = await supabase.auth.setSession({
+          access_token: hashParams.access_token,
+          refresh_token: hashParams.refresh_token,
+        })
+        if (sessionError) throw sessionError
+
+        setLoading(false)
+        return
+      }
+
+      setLoading(false)
+    } catch (e: any) {
+      setError(`Error: ${e.message}`)
+      setLoading(false)
+    }
+  }, [])
+
+  const signInWithGoogle = useCallback(async () => {
+    setError(null)
+    setLoading(true)
+
+    try {
+      const redirectUrl = getOAuthRedirectUrl()
+
+      const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: redirectUrl,
+          queryParams: {
+            hd: ALLOWED_DOMAIN,
+          },
+          skipBrowserRedirect: true,
+        },
+      })
+
+      if (oauthError) throw oauthError
+      if (!data.url) throw new Error("No se recibió URL de autenticación")
+
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl)
+
+      if (result.type === "success" && result.url) {
+        await createSessionFromUrl(result.url)
+      } else {
+        setLoading(false)
+      }
 
     } catch (e: any) {
       setError(`Error: ${e.message}`)
-    } finally {
       setLoading(false)
     }
-  }
+  }, [createSessionFromUrl])
 
-  const signInWithGoogle = () => {
-    if (!webClientId) {
-      setError("Falta Client ID en .env")
-      return
+  return { loading, error, signInWithGoogle }
+}
+
+/**
+ * Extracts query parameters from URL.
+ */
+function extractQueryParams(url: string): Record<string, string> {
+  const params: Record<string, string> = {}
+  const questionIndex = url.indexOf("?")
+  if (questionIndex === -1) return params
+
+  let queryString = url.substring(questionIndex + 1)
+  const hashIndex = queryString.indexOf("#")
+  if (hashIndex !== -1) queryString = queryString.substring(0, hashIndex)
+
+  for (const pair of queryString.split("&")) {
+    const [key, value] = pair.split("=")
+    if (key && value) {
+      params[decodeURIComponent(key)] = decodeURIComponent(value)
     }
-    setError(null)
-    setLoading(true)
-    promptAsync({ showInRecents: true })
   }
+  return params
+}
 
-  return { request, loading, error, signInWithGoogle }
+/**
+ * Extracts hash fragment parameters from URL.
+ */
+function extractHashParams(url: string): Record<string, string> {
+  const params: Record<string, string> = {}
+  const hashIndex = url.indexOf("#")
+  if (hashIndex === -1) return params
+
+  const hash = url.substring(hashIndex + 1)
+  for (const pair of hash.split("&")) {
+    const [key, value] = pair.split("=")
+    if (key && value) {
+      params[decodeURIComponent(key)] = decodeURIComponent(value)
+    }
+  }
+  return params
 }

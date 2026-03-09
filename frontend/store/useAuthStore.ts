@@ -1,10 +1,3 @@
-/**
- * store/useAuthStore.ts
- * Estado global de autenticación con Zustand
- * Conectado a Supabase real via authService
- * Soporta login con email/password y Google OAuth
- */
-
 import {
   getMyProfile,
   onAuthStateChange,
@@ -13,11 +6,14 @@ import {
   signUp as sbSignUp,
 } from "@/lib/services/authService";
 import { registerAndSavePushToken } from "@/lib/services/pushService";
+import { supabase } from "@/lib/supabase";
 import { create } from "zustand";
 
-// ── Tipos ─────────────────────────────────────────────────────────────────────
 export type UserRole = "estudiante" | "admin";
 
+/**
+ * Represents the authenticated user session with profile information.
+ */
 export interface UserSession {
   id: string;
   email: string;
@@ -29,10 +25,14 @@ export interface UserSession {
   bio?: string | null;
 }
 
+/**
+ * Global authentication state interface.
+ */
 interface AuthState {
   user: UserSession | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  isHydrating: boolean;
 
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, fullName: string) => Promise<void>;
@@ -41,45 +41,38 @@ interface AuthState {
   initialize: () => () => void;
 }
 
-// ── Store ─────────────────────────────────────────────────────────────────────
+/**
+ * Authentication store for managing user session state.
+ * Integrates with Supabase Auth for email/password and OAuth flows.
+ * 
+ * @example
+ * const { user, signIn, initialize } = useAuthStore();
+ */
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   isLoading: false,
   isAuthenticated: false,
+  isHydrating: true,
 
   setUser: (user) => set({ user, isAuthenticated: !!user }),
 
-  // ── Inicializar: escucha cambios de sesión de Supabase ─────────────────────
   initialize: () => {
-    const { data: { subscription } } = onAuthStateChange(async (event, session) => {
-      if (event === "SIGNED_IN" && session?.user) {
+    /**
+     * Processes Supabase auth session and validates @ucaldas.edu.co domain.
+     * Fetches full user profile asynchronously for non-blocking auth flow.
+     */
+    const processSession = async (session: any) => {
+      if (session?.user) {
         try {
-          // Intentar obtener perfil completo de la tabla profiles
-          const profile = await getMyProfile();
-          set({
-            user: {
-              id: session.user.id,
-              email: session.user.email!,
-              // Si hay perfil en DB úsalo, si no usa los datos de Google
-              fullName: profile?.full_name
-                ?? session.user.user_metadata?.full_name
-                ?? "Estudiante",
-              avatarUrl: profile?.avatar_url
-                ?? session.user.user_metadata?.avatar_url
-                ?? null,
-              phoneNumber: profile?.phone_number ?? null,
-              role: (profile?.role as UserRole) ?? "estudiante",
-              semester: profile?.semester ?? null,
-              bio: profile?.bio ?? null,
-            },
-            isAuthenticated: true,
-          });
-          // Registrar push token tras login exitoso (no bloquea)
-          registerAndSavePushToken(session.user.id).catch(() => {});
-        } catch (error) {
-          // Fallback: si no hay perfil todavía (usuario nuevo con Google)
-          // guardamos los datos básicos del token de Google
-          console.warn("Perfil no encontrado, usando datos de sesión:", error);
+          const email = session.user.email?.toLowerCase();
+
+          if (!email?.endsWith('@ucaldas.edu.co')) {
+            console.warn("[authStore] Usuario rechazado: no es de ucaldas.edu.co -", email);
+            await supabase.auth.signOut();
+            set({ user: null, isAuthenticated: false, isHydrating: false });
+            return;
+          }
+
           set({
             user: {
               id: session.user.id,
@@ -92,49 +85,117 @@ export const useAuthStore = create<AuthState>((set) => ({
               bio: null,
             },
             isAuthenticated: true,
+            isHydrating: false,
+          });
+
+          getMyProfile()
+            .then((profile) => {
+              if (profile) {
+                set((state) => ({
+                  user: state.user ? {
+                    ...state.user,
+                    fullName: profile.full_name,
+                    avatarUrl: profile.avatar_url,
+                    role: profile.role,
+                    semester: profile.semester,
+                    bio: profile.bio,
+                  } : null,
+                }));
+              }
+            })
+            .catch((error) => {
+              console.warn("[authStore] No se pudo obtener perfil completo:", error);
+            });
+
+          registerAndSavePushToken(session.user.id).catch(() => {});
+        } catch (error) {
+          console.warn("[authStore] Error al procesar sesión:", error);
+          set({
+            user: {
+              id: session.user.id,
+              email: session.user.email!,
+              fullName: session.user.user_metadata?.full_name ?? "Estudiante",
+              avatarUrl: session.user.user_metadata?.avatar_url ?? null,
+              phoneNumber: null,
+              role: "estudiante",
+              semester: null,
+              bio: null,
+            },
+            isAuthenticated: true,
+            isHydrating: false,
           });
         }
+      } else {
+        set({ user: null, isAuthenticated: false, isHydrating: false });
       }
+    };
 
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        await processSession(session);
+      } catch (error) {
+        console.error("[authStore] Error al verificar sesión inicial:", error);
+        set({ user: null, isAuthenticated: false, isHydrating: false });
+      }
+    })();
+
+    const { data: { subscription } } = onAuthStateChange(async (event, session) => {
+      if (event === "SIGNED_IN") {
+        await processSession(session);
+      }
       if (event === "SIGNED_OUT") {
-        set({ user: null, isAuthenticated: false });
+        set({ user: null, isAuthenticated: false, isHydrating: false });
       }
     });
 
     return () => subscription.unsubscribe();
   },
 
-  // ── Sign In email/password ─────────────────────────────────────────────────
   signIn: async (email, password) => {
     set({ isLoading: true });
     try {
       const { user } = await sbSignIn({ email, password });
       if (!user) throw new Error("No se pudo iniciar sesión");
 
-      const profile = await getMyProfile();
-      if (!profile) throw new Error("No se encontró el perfil del usuario");
-
       set({
         user: {
-          id: profile.id,
+          id: user.id!,
           email: user.email!,
-          fullName: profile.full_name,
-          avatarUrl: profile.avatar_url,
-          phoneNumber: profile.phone_number,
-          role: profile.role as UserRole,
-          semester: profile.semester,
-          bio: profile.bio,
+          fullName: user.user_metadata?.full_name ?? "Estudiante",
+          avatarUrl: user.user_metadata?.avatar_url ?? null,
+          phoneNumber: null,
+          role: "estudiante",
+          semester: null,
+          bio: null,
         },
         isAuthenticated: true,
       });
-      // Registrar push token tras login exitoso (no bloquea)
-      registerAndSavePushToken(profile.id).catch(() => {});
+
+      getMyProfile()
+        .then((profile) => {
+          if (profile) {
+            set((state) => ({
+              user: state.user ? {
+                ...state.user,
+                fullName: profile.full_name,
+                avatarUrl: profile.avatar_url,
+                role: profile.role,
+                semester: profile.semester,
+                bio: profile.bio,
+              } : null,
+            }));
+            registerAndSavePushToken(profile.id).catch(() => {});
+          }
+        })
+        .catch(() => {
+          console.warn("[authStore] No se pudo obtener perfil completo (continuando)");
+        });
     } finally {
       set({ isLoading: false });
     }
   },
 
-  // ── Sign Up ────────────────────────────────────────────────────────────────
   signUp: async (email, password, fullName) => {
     set({ isLoading: true });
     try {

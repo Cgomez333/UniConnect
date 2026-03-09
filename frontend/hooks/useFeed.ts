@@ -1,14 +1,3 @@
-/**
- * hooks/useFeed.ts
- *
- * Encapsula TODA la lógica de datos del feed:
- * - Carga de solicitudes filtradas por materias en común
- * - Pull-to-refresh
- * - Scroll infinito (paginación)
- * - Filtro local por materias seleccionadas
- * - Estado de carga / error
- */
-
 import {
   FeedFilters,
   FeedStudyRequest,
@@ -20,6 +9,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 const PAGE_SIZE = 10
 
+/**
+ * Return type for useFeed hook.
+ */
 interface UseFeedReturn {
   // Datos
   filtered: FeedStudyRequest[]
@@ -40,6 +32,11 @@ interface UseFeedReturn {
   loadMore: () => void
 }
 
+/**
+ * Hook for managing feed data, filters, and pagination.
+ * Fetches study requests filtered by user's enrolled subjects.
+ * Supports search, subject filtering, pull-to-refresh, and infinite scroll.
+ */
 export function useFeed(): UseFeedReturn {
   const [requests, setRequests] = useState<FeedStudyRequest[]>([])
   const [loading, setLoading] = useState(true)
@@ -48,6 +45,7 @@ export function useFeed(): UseFeedReturn {
   const [error, setError] = useState<string | null>(null)
   const [userSubjectIds, setUserSubjectIds] = useState<string[]>([])
   const [userSubjects, setUserSubjects] = useState<FeedSubject[]>([])
+  const [subjectsResolved, setSubjectsResolved] = useState(false)
 
   const [search, setSearch] = useState("")
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([])
@@ -55,21 +53,28 @@ export function useFeed(): UseFeedReturn {
   const pageRef = useRef(0)
   const hasMoreRef = useRef(true)
 
-  // Cargar materias del usuario una vez
   useEffect(() => {
     getEnrolledSubjectsForUser()
       .then((subjects) => {
         setUserSubjectIds(subjects.map((s) => s.id))
         setUserSubjects(subjects)
+        setSubjectsResolved(true)
       })
       .catch(() => {
         setUserSubjectIds([])
         setUserSubjects([])
+        setSubjectsResolved(true)
       })
   }, [])
 
   const fetchData = useCallback(async (isRefresh = false) => {
-    isRefresh ? setRefreshing(true) : setLoading(true)
+    if (!subjectsResolved) return
+
+    if (isRefresh) {
+      setRefreshing(true)
+    } else {
+      setLoading(true)
+    }
     setError(null)
     pageRef.current = 0
     hasMoreRef.current = true
@@ -88,12 +93,12 @@ export function useFeed(): UseFeedReturn {
       setLoading(false)
       setRefreshing(false)
     }
-  }, [search, userSubjectIds])
+  }, [search, userSubjectIds, subjectsResolved])
 
   useEffect(() => { fetchData() }, [fetchData])
 
   const loadMore = useCallback(async () => {
-    if (loadingMore || !hasMoreRef.current || loading) return
+    if (!subjectsResolved || loadingMore || !hasMoreRef.current || loading) return
     setLoadingMore(true)
 
     try {
@@ -113,9 +118,8 @@ export function useFeed(): UseFeedReturn {
     } finally {
       setLoadingMore(false)
     }
-  }, [loadingMore, loading, search, userSubjectIds])
+  }, [loadingMore, loading, search, userSubjectIds, subjectsResolved])
 
-  // Filtro local por materias seleccionadas
   const filtered = useMemo(() => {
     if (selectedSubjects.length === 0) return requests
     return requests.filter((r) => selectedSubjects.includes(r.subject_id))

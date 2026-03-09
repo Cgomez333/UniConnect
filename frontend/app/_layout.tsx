@@ -1,25 +1,25 @@
-/**
- * app/_layout.tsx
- * Layout raíz — solo declara rutas que existen como archivos en /app
- */
-
 import { useAuthStore } from "@/store/useAuthStore";
 import { Stack } from "expo-router";
 import { useEffect } from "react";
 
+/**
+ * Root layout component. Initializes authentication state listeners
+ * and declares all available routes in the application.
+ */
 export default function RootLayout() {
   const initialize = useAuthStore((s) => s.initialize);
 
   useEffect(() => {
     const unsubscribe = initialize();
     return unsubscribe;
-  }, []);
+  }, [initialize]);
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="login" />
       <Stack.Screen name="onboarding" />
+      <Stack.Screen name="oauth-callback" />
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="(admin)" />
       <Stack.Screen name="chat/[conversationId]" />
@@ -30,7 +30,6 @@ export default function RootLayout() {
       <Stack.Screen name="postular/[id]" />
       <Stack.Screen name="perfil-estudiante/[id]" />
       <Stack.Screen name="recurso/[id]" />
-      {/* <Stack.Screen name="register"         options={{ presentation: "modal" }} /> */}
     </Stack>
   );
 }
