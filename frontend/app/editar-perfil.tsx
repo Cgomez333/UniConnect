@@ -65,7 +65,6 @@ export default function EditarPerfilScreen() {
   const [allPrograms, setAllPrograms] = useState<Program[]>([]);
   const [userPrograms, setUserPrograms] = useState<UserProgram[]>([]);
   const [selectedProgramId, setSelectedProgramId] = useState<string>("");
-  const [originalProgramId, setOriginalProgramId] = useState<string>("");
   const [showProgramSelector, setShowProgramSelector] = useState(false);
 
   // Subjects state
@@ -109,7 +108,6 @@ export default function EditarPerfilScreen() {
       const primaryProgram = programsList.find((p) => p.is_primary);
       if (primaryProgram) {
         setSelectedProgramId(primaryProgram.id);
-        setOriginalProgramId(primaryProgram.id);
       }
 
       const mySubjects = await getMySubjects(user.id);
@@ -211,6 +209,21 @@ export default function EditarPerfilScreen() {
     await processAndUpload(result.assets[0].uri);
   };
 
+  const handleSelectProgram = async (programId: string) => {
+    if (programId === selectedProgramId) {
+      setShowProgramSelector(false);
+      return;
+    }
+    try {
+      await setPrimaryProgram(user!.id, programId);
+      setSelectedProgramId(programId);
+      setUserSubjects([]); // limpiar materias al cambiar programa
+      setShowProgramSelector(false);
+    } catch (error) {
+      Alert.alert("Error", "No se pudo actualizar el programa. Intenta de nuevo.");
+    }
+  };
+
   // ── Materias ──────────────────────────────────────────────────────────
   const handleToggleSubject = (subjectId: string, isSelected: boolean) => {
     if (isSelected) {
@@ -243,18 +256,6 @@ export default function EditarPerfilScreen() {
         bio: bio.trim() || undefined,
         phone_number: phoneNumber.trim() || null,
       });
-
-      // Actualizar programa si cambió
-      if (selectedProgramId && selectedProgramId !== originalProgramId) {
-        await setPrimaryProgram(user.id, selectedProgramId);
-        setOriginalProgramId(selectedProgramId);
-        // Limpiar materias porque cambia el programa base
-        const currentSubjects = await getMySubjects(user.id);
-        for (const s of currentSubjects) {
-          await removeMySubject(user.id, s.subject_id);
-        }
-        setUserSubjects([]);
-      }
 
       // Actualizar materias si cambiaron
       const currentSubjects = await getMySubjects(user.id);
@@ -301,6 +302,11 @@ export default function EditarPerfilScreen() {
       </SafeAreaView>
     );
   }
+
+  const currentSelected = allPrograms.find((p) => p.id === selectedProgramId);
+  const programName = currentSelected
+    ? `${currentSelected.name} — ${currentSelected.faculty_name}`
+    : "Sin programa";
 
   const isFormValid = bio.trim() || phoneNumber.trim();
 
@@ -360,49 +366,38 @@ export default function EditarPerfilScreen() {
         {/* ── Programa (EDITABLE) ── */}
         <Field label="Programa académico" C={C}>
           <TouchableOpacity
-            style={[
-              styles.readOnlyInput,
-              { backgroundColor: C.surface, borderColor: showProgramSelector ? C.primary : C.border },
-            ]}
+            style={[styles.selectorBtn, { backgroundColor: C.surface, borderColor: C.border }]}
             onPress={() => setShowProgramSelector((v) => !v)}
             activeOpacity={0.8}
           >
-            <Text style={[styles.readOnlyText, { color: C.textPrimary }]}>
+            <Text style={[styles.selectorBtnText, { color: selectedProgramId ? C.textPrimary : C.textPlaceholder }]}>
               {allPrograms.find((p) => p.id === selectedProgramId)
-                ? `${allPrograms.find((p) => p.id === selectedProgramId)!.name}`
+                ? `${allPrograms.find((p) => p.id === selectedProgramId)!.name} — ${allPrograms.find((p) => p.id === selectedProgramId)!.faculty_name}`
                 : "Selecciona tu programa"}
             </Text>
-            <Text style={[styles.readOnlyHint, { color: C.textSecondary }]}>
-              {showProgramSelector ? "Toca para cerrar" : "Toca para cambiar"}
-            </Text>
+            <Text style={{ color: C.textSecondary }}>▾</Text>
           </TouchableOpacity>
 
           {showProgramSelector && (
-            <View style={[styles.subjectsSelector, { backgroundColor: C.surface, borderColor: C.border, marginTop: 8 }]}>
+            <View style={[styles.programList, { backgroundColor: C.surface, borderColor: C.border }]}>
               {allPrograms.map((p) => (
                 <TouchableOpacity
                   key={p.id}
                   style={[
-                    styles.subjectCheckbox,
-                    {
-                      backgroundColor: selectedProgramId === p.id ? C.primary + "18" : "transparent",
-                      borderColor: C.border,
-                    },
+                    styles.programOption,
+                    { borderBottomColor: C.border },
+                    selectedProgramId === p.id && { backgroundColor: C.primary + "18" },
                   ]}
-                  onPress={() => {
-                    setSelectedProgramId(p.id);
-                    setShowProgramSelector(false);
-                    setUserSubjects([]);
-                    setAllSubjects([]);
-                  }}
+                  onPress={() => handleSelectProgram(p.id)}
+                  activeOpacity={0.8}
                 >
-                  <Text style={{ color: selectedProgramId === p.id ? C.primary : C.textPrimary, fontSize: 18, marginRight: 10 }}>
-                    {selectedProgramId === p.id ? "✓" : "○"}
-                  </Text>
                   <View style={{ flex: 1 }}>
-                    <Text style={[{ color: C.textPrimary, fontWeight: selectedProgramId === p.id ? "600" : "400" }]}>{p.name}</Text>
-                    <Text style={{ color: C.textSecondary, fontSize: 12 }}>{(p as any).faculty_name}</Text>
+                    <Text style={[{ fontSize: 14, fontWeight: "500" }, { color: C.textPrimary }]}>{p.name}</Text>
+                    <Text style={[{ fontSize: 12, marginTop: 1 }, { color: C.textSecondary }]}>{p.faculty_name}</Text>
                   </View>
+                  {selectedProgramId === p.id && (
+                    <Text style={{ color: C.primary, fontSize: 16 }}>✓</Text>
+                  )}
                 </TouchableOpacity>
               ))}
             </View>
@@ -619,6 +614,12 @@ const styles = StyleSheet.create({
   readOnlyInput: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 12, minHeight: 48, justifyContent: "center", opacity: 0.6 },
   readOnlyText: { fontSize: 15, fontWeight: "500" },
   readOnlyHint: { fontSize: 11, marginTop: 4, fontStyle: "italic" },
+
+  // Program selector
+  selectorBtn: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 14, height: 48, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  selectorBtnText: { fontSize: 15, flex: 1 },
+  programList: { borderWidth: 1, borderRadius: 8, marginTop: 4, overflow: "hidden" },
+  programOption: { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1 },
 
   // Avatar
   avatarContainer: { alignItems: "center", marginBottom: 28 },
