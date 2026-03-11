@@ -129,12 +129,12 @@ export function useAdmin(search: string) {
     subjects.find((s) => s.id === sid)?.programs ?? []
 
   // ── Acciones de modal ─────────────────────────────────────────────────────
-  const openCreateFaculty = () => setFacultyModal(FACULTY_MODAL_INIT)
+  const openCreateFaculty = () => setFacultyModal({ ...FACULTY_MODAL_INIT, visible: true })
   const openEditFaculty = (item: Faculty) =>
     setFacultyModal({ visible: true, mode: "edit", item, form: { name: item.name }, error: "" })
   const closeFacultyModal = () => setFacultyModal((p) => ({ ...p, visible: false }))
 
-  const openCreateProgram = () => setProgramModal(PROGRAM_MODAL_INIT)
+  const openCreateProgram = () => setProgramModal({ ...PROGRAM_MODAL_INIT, visible: true })
   const openEditProgram = (item: Program) =>
     setProgramModal({
       visible: true, mode: "edit", item,
@@ -142,7 +142,7 @@ export function useAdmin(search: string) {
     })
   const closeProgramModal = () => setProgramModal((p) => ({ ...p, visible: false }))
 
-  const openCreateSubject = () => setSubjectModal(SUBJECT_MODAL_INIT)
+  const openCreateSubject = () => setSubjectModal({ ...SUBJECT_MODAL_INIT, visible: true })
   const openEditSubject = (item: Subject) =>
     setSubjectModal({
       visible: true, mode: "edit", item,
