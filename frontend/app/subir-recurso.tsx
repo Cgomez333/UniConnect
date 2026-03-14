@@ -11,18 +11,18 @@
  */
 
 import { Colors } from "@/constants/Colors"
-import { useUploadResource } from "@/hooks/useResources"
-import {
-  getEnrolledSubjectsForUser,
-  type Subject,
-} from "@/lib/services/studyRequestsService"
+import { useResources } from "@/hooks/application/useResources"
+import { supabase } from "@/lib/supabase"
+import { useAuthStore } from "@/store/useAuthStore"
+import { decode } from "base64-arraybuffer"
 import { router } from "expo-router"
 import * as DocumentPicker from "expo-document-picker"
+import * as FileSystem from "expo-file-system/legacy"
 import { useEffect, useState } from "react"
+import { SafeAreaView } from "react-native-safe-area-context"
 import {
   ActivityIndicator,
   Alert,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -32,9 +32,21 @@ import {
   View,
 } from "react-native"
 
+interface Subject {
+  id: string
+  name: string
+}
+
+const ALLOWED_EXTENSIONS = [
+  "pdf", "docx", "doc", "xlsx", "xls", "pptx", "ppt", "txt", "jpg", "jpeg", "png",
+] as const
+
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024
+
 export default function SubirRecursoScreen() {
   const scheme = useColorScheme() ?? "light"
   const C = Colors[scheme]
+  const user = useAuthStore((s) => s.user)
 
   // ── Formulario ────────────────────────────────────────────────────────────
   const [title, setTitle] = useState("")
@@ -51,14 +63,51 @@ export default function SubirRecursoScreen() {
   const [loadingData, setLoadingData] = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
 
-  const { uploading, error: uploadError, upload, validateFile } = useUploadResource()
+  const { loading: uploading, error: uploadError, uploadResource } = useResources()
+
+  const validateFile = (fileName: string, sizeBytes: number): string | null => {
+    const ext = fileName.split(".").pop()?.toLowerCase() ?? ""
+    if (!(ALLOWED_EXTENSIONS as readonly string[]).includes(ext)) {
+      return "Formato no permitido. Usa: pdf, docx, xlsx, pptx, txt, jpg, png."
+    }
+    if (sizeBytes > MAX_FILE_SIZE_BYTES) {
+      return "El archivo excede el máximo de 10 MB."
+    }
+    return null
+  }
 
   // ── Carga inicial ─────────────────────────────────────────────────────────
   const loadData = async () => {
     setLoadingData(true)
     setFetchError(null)
     try {
-      const subs = await getEnrolledSubjectsForUser()
+      if (!user?.id) {
+        throw new Error("No hay sesión activa.")
+      }
+
+      const { data, error } = await supabase
+        .from("user_subjects")
+        .select("subject_id, subjects(id, name)")
+        .eq("user_id", user.id)
+
+      if (error) throw new Error(error.message)
+
+      const rows: any[] = data ?? []
+      const mapped: Subject[] = []
+      const seen: Record<string, boolean> = {}
+      for (let i = 0; i < rows.length; i++) {
+        const subj = rows[i].subjects
+        const list = Array.isArray(subj) ? subj : subj ? [subj] : []
+        for (let j = 0; j < list.length; j++) {
+          const item = list[j]
+          if (!item?.id || seen[item.id]) continue
+          seen[item.id] = true
+          mapped.push({ id: item.id, name: item.name })
+        }
+      }
+
+      mapped.sort((a, b) => a.name.localeCompare(b.name))
+      const subs = mapped
       setSubjects(subs)
     } catch (e: unknown) {
       setFetchError(e instanceof Error ? e.message : "No se pudieron cargar tus materias.")
@@ -69,7 +118,7 @@ export default function SubirRecursoScreen() {
 
   useEffect(() => {
     loadData()
-  }, [])
+  }, [user?.id])
 
   // ── Seleccionar archivo ───────────────────────────────────────────────────
   const handlePickFile = async () => {
@@ -110,16 +159,73 @@ export default function SubirRecursoScreen() {
 
   // ── Envío ─────────────────────────────────────────────────────────────────
   const handleUpload = async () => {
-    if (!isValid || !selectedSubject || !pickedFile) return
+    if (!isValid || !selectedSubject || !pickedFile || !user?.id) return
 
-    const resource = await upload({
-      subject_id: selectedSubject,
-      title: title.trim(),
-      description: description.trim() || undefined,
-      file_uri: pickedFile.uri,
-      file_name: pickedFile.name,
-      file_size_bytes: pickedFile.size,
-    })
+    let resource = null
+    try {
+      const { data: userPrograms, error: upError } = await supabase
+        .from("user_programs")
+        .select("program_id")
+        .eq("user_id", user.id)
+        .order("is_primary", { ascending: false })
+        .limit(1)
+
+      if (upError || !userPrograms?.length) {
+        throw new Error("No tienes un programa académico asignado.")
+      }
+
+      const programId = userPrograms[0].program_id as string
+      const base64 = await FileSystem.readAsStringAsync(pickedFile.uri, { encoding: "base64" })
+      const arrayBuffer = decode(base64)
+      const ext = pickedFile.name.split(".").pop()?.toLowerCase() ?? "pdf"
+      const mimeType = ext === "pdf"
+        ? "application/pdf"
+        : ext === "docx"
+        ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        : ext === "doc"
+        ? "application/msword"
+        : ext === "xlsx"
+        ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        : ext === "xls"
+        ? "application/vnd.ms-excel"
+        : ext === "pptx"
+        ? "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        : ext === "ppt"
+        ? "application/vnd.ms-powerpoint"
+        : ext === "txt"
+        ? "text/plain"
+        : ext === "jpg" || ext === "jpeg"
+        ? "image/jpeg"
+        : ext === "png"
+        ? "image/png"
+        : "application/octet-stream"
+
+      const storagePath = `${user.id}/${Date.now()}_${pickedFile.name}`
+      const { error: uploadErrorStorage } = await supabase.storage
+        .from("resources")
+        .upload(storagePath, arrayBuffer, {
+          contentType: mimeType,
+          upsert: false,
+        })
+
+      if (uploadErrorStorage) {
+        throw new Error(`Error al subir archivo: ${uploadErrorStorage.message}`)
+      }
+
+      const { data: urlData } = supabase.storage.from("resources").getPublicUrl(storagePath)
+      resource = await uploadResource(user.id, programId, {
+        subject_id: selectedSubject,
+        title: title.trim(),
+        description: description.trim() || undefined,
+        file_url: urlData.publicUrl,
+        file_name: pickedFile.name,
+        file_type: ext.toUpperCase(),
+        file_size_kb: Math.round(pickedFile.size / 1024),
+      })
+    } catch (e) {
+      Alert.alert("Error", e instanceof Error ? e.message : "No se pudo subir el recurso.")
+      return
+    }
 
     if (resource) {
       Alert.alert(

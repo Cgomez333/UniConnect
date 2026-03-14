@@ -69,10 +69,34 @@ export function useApplications() {
     [container]
   )
 
+  const getMyApplicationStatus = useCallback(
+    async (requestId: string, userId: string) => {
+      try {
+        const repository = container.getApplicationRepository()
+        return await repository.getMyApplicationStatus(requestId, userId)
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : "Error al validar postulación"
+        setState((prev) => ({ ...prev, error: errorMsg }))
+        return null
+      }
+    },
+    [container]
+  )
+
+  const cancelMyApplication = useCallback(
+    async (requestId: string, userId: string) => {
+      const repo = container.getApplicationRepository()
+      return repo.cancel(requestId, userId)
+    },
+    [container]
+  )
+
   return {
     ...state,
     applyToRequest,
     getApplicationsForRequest,
     reviewApplication,
+    getMyApplicationStatus,
+    cancelMyApplication,
   }
 }

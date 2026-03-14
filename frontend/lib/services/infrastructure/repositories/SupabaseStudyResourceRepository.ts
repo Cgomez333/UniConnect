@@ -24,7 +24,6 @@ export class SupabaseStudyResourceRepository implements IStudyResourceRepository
       q
         .select("*, profiles ( full_name, avatar_url )")
         .eq("subject_id", subjectId)
-        .eq("is_active", true)
         .order("created_at", { ascending: false })
     )
   }
@@ -34,7 +33,6 @@ export class SupabaseStudyResourceRepository implements IStudyResourceRepository
       q
         .select("*, profiles ( full_name, avatar_url )")
         .eq("user_id", userId)
-        .eq("is_active", true)
         .order("created_at", { ascending: false })
     )
   }
@@ -56,7 +54,6 @@ export class SupabaseStudyResourceRepository implements IStudyResourceRepository
         file_name: payload.file_name,
         file_type: payload.file_type ?? null,
         file_size_kb: payload.file_size_kb ?? null,
-        is_active: true,
       })
       .select("*, profiles ( full_name, avatar_url )")
       .single()

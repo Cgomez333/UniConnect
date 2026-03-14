@@ -7,34 +7,67 @@ export class SupabaseStudyRequestRepository implements IStudyRequestRepository {
   async getById(id: string): Promise<StudyRequest | null> {
     const { data, error } = await supabase
       .from("study_requests")
-      .select("*, subjects ( name )")
+      .select("*, subjects ( name ), profiles!study_requests_author_id_fkey ( full_name, avatar_url )")
       .eq("id", id)
       .single()
 
     if (error && error.code !== "PGRST116") throw error
-    return data ?? null
+    if (!data) return null
+
+    const request = data as StudyRequest
+    return {
+      ...request,
+      subject_name: request.subjects?.name ?? "Sin materia",
+    }
   }
 
   async getFeed(filters?: { subject_id?: string; search?: string }, page = 0, pageSize = 10): Promise<StudyRequest[]> {
-    return apiGet<StudyRequest>("study_requests", (q) => {
-      let query = q
-        .select("*, subjects ( name )")
-        .eq("status", "abierta")
-        .eq("is_active", true)
-        .order("created_at", { ascending: false })
-        .range(page * pageSize, (page + 1) * pageSize - 1)
+    let query = supabase
+      .from("study_requests")
+      .select("*, subjects ( name ), profiles!study_requests_author_id_fkey ( full_name, avatar_url )")
+      .eq("status", "abierta")
+      .eq("is_active", true)
+      .order("created_at", { ascending: false })
+      .range(page * pageSize, (page + 1) * pageSize - 1)
 
-      if (filters?.subject_id) query = query.eq("subject_id", filters.subject_id)
-      if (filters?.search) query = query.ilike("title", `%${filters.search}%`)
+    if (filters?.subject_id) query = query.eq("subject_id", filters.subject_id)
+    if (filters?.search) query = query.ilike("title", `%${filters.search}%`)
 
-      return query
-    })
+    const { data, error } = await query
+    if (error) throw error
+
+    const requests = (data ?? []) as StudyRequest[]
+    if (requests.length === 0) return requests
+
+    const requestIds = requests.map((r) => r.id)
+    const acceptedByRequest: Record<string, number> = {}
+
+    const { data: acceptedRows, error: acceptedErr } = await supabase
+      .from("applications")
+      .select("request_id")
+      .in("request_id", requestIds)
+      .eq("status", "aceptada")
+
+    if (!acceptedErr) {
+      const rows: any[] = acceptedRows ?? []
+      for (let i = 0; i < rows.length; i++) {
+        const reqId = String(rows[i].request_id ?? "")
+        if (!reqId) continue
+        acceptedByRequest[reqId] = (acceptedByRequest[reqId] ?? 0) + 1
+      }
+    }
+
+    return requests.map((r) => ({
+      ...r,
+      subject_name: r.subjects?.name ?? "Sin materia",
+      applications_count: Math.min((acceptedByRequest[r.id] ?? 0) + 1, r.max_members),
+    }))
   }
 
   async getByAuthor(userId: string): Promise<StudyRequest[]> {
     const { data, error } = await supabase
       .from("study_requests")
-      .select("*, subjects ( name )")
+      .select("*, subjects ( name ), profiles!study_requests_author_id_fkey ( full_name, avatar_url )")
       .eq("author_id", userId)
       .eq("is_active", true)
       .order("created_at", { ascending: false })
@@ -64,6 +97,7 @@ export class SupabaseStudyRequestRepository implements IStudyRequestRepository {
 
     return requests.map((r) => ({
       ...r,
+      subject_name: r.subjects?.name ?? "Sin materia",
       applications_count: Math.min((acceptedByRequest[r.id] ?? 0) + 1, r.max_members),
     }))
   }
@@ -115,5 +149,40 @@ export class SupabaseStudyRequestRepository implements IStudyRequestRepository {
     })
 
     if (error) throw new Error(error.code === "P0001" ? error.message : error.message)
+  }
+
+  async isAdmin(requestId: string, userId: string): Promise<boolean> {
+    const { data, error } = await supabase.rpc("is_request_admin", {
+      p_request_id: requestId,
+      p_user_id: userId,
+    })
+    if (error) throw new Error(error.message)
+    return !!data
+  }
+
+  async getAdmins(requestId: string): Promise<import("@/lib/services/domain/repositories/IStudyRequestRepository").RequestAdminEntry[]> {
+    const { data, error } = await supabase.rpc("get_request_admins", {
+      p_request_id: requestId,
+    })
+    if (error) throw new Error(error.message)
+    return (data ?? []) as any[]
+  }
+
+  async assignAdmin(requestId: string, targetUserId: string, actorUserId: string): Promise<void> {
+    const { error } = await supabase.rpc("assign_request_admin", {
+      p_request_id: requestId,
+      p_target_user_id: targetUserId,
+      p_actor_user_id: actorUserId,
+    })
+    if (error) throw new Error(error.message)
+  }
+
+  async revokeAdmin(requestId: string, targetUserId: string, actorUserId: string): Promise<void> {
+    const { error } = await supabase.rpc("revoke_request_admin", {
+      p_request_id: requestId,
+      p_target_user_id: targetUserId,
+      p_actor_user_id: actorUserId,
+    })
+    if (error) throw new Error(error.message)
   }
 }

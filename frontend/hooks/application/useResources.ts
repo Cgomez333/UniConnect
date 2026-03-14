@@ -8,6 +8,14 @@ interface UseResourcesState {
   data: StudyResource[]
 }
 
+function toErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof Error) return err.message
+  if (typeof err === "object" && err !== null && "message" in err) {
+    return String((err as { message: unknown }).message)
+  }
+  return fallback
+}
+
 export function useResources() {
   const container = DIContainer.getInstance()
   const [state, setState] = useState<UseResourcesState>({
@@ -25,7 +33,7 @@ export function useResources() {
         setState({ loading: false, error: null, data: result })
         return result
       } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : "Error al cargar recursos"
+        const errorMsg = toErrorMessage(err, "Error al cargar recursos")
         setState({ loading: false, error: errorMsg, data: [] })
         throw err
       }
@@ -58,7 +66,7 @@ export function useResources() {
         setState((prev) => ({ ...prev, loading: false, error: null }))
         return result
       } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : "Error al cargar recurso"
+        const errorMsg = toErrorMessage(err, "Error al cargar recurso")
         setState((prev) => ({ ...prev, loading: false, error: errorMsg }))
         throw err
       }

@@ -1,5 +1,13 @@
 import type { StudyRequest } from "@/types"
 
+export interface RequestAdminEntry {
+  user_id: string
+  full_name: string
+  avatar_url: string | null
+  granted_by: string
+  created_at: string
+}
+
 export interface IStudyRequestRepository {
   getById(id: string): Promise<StudyRequest | null>
   getFeed(filters?: { subject_id?: string; search?: string }, page?: number, pageSize?: number): Promise<StudyRequest[]>
@@ -8,4 +16,8 @@ export interface IStudyRequestRepository {
   updateStatus(requestId: string, status: "abierta" | "cerrada" | "expirada"): Promise<void>
   updateContent(requestId: string, userId: string, payload: { title?: string; description?: string }): Promise<void>
   cancel(requestId: string, userId: string): Promise<void>
+  isAdmin(requestId: string, userId: string): Promise<boolean>
+  getAdmins(requestId: string): Promise<RequestAdminEntry[]>
+  assignAdmin(requestId: string, targetUserId: string, actorUserId: string): Promise<void>
+  revokeAdmin(requestId: string, targetUserId: string, actorUserId: string): Promise<void>
 }

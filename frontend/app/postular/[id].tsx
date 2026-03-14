@@ -7,7 +7,8 @@
  */
 
 import { Colors } from "@/constants/Colors";
-import { applyToRequest } from "@/lib/services/careerService";
+import { useApplications } from "@/hooks/application/useApplications";
+import { DIContainer } from "@/lib/services/di/container";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/store/useAuthStore";
 import { router, useLocalSearchParams } from "expo-router";
@@ -42,6 +43,7 @@ export default function PostularScreen() {
   const C = Colors[scheme];
   const insets = useSafeAreaInsets();
   const user = useAuthStore((s) => s.user);
+  const { applyToRequest, getMyApplicationStatus } = useApplications();
 
   const [request, setRequest] = useState<RequestSummary | null>(null);
   const [loadingRequest, setLoadingRequest] = useState(true);
@@ -52,20 +54,23 @@ export default function PostularScreen() {
   useEffect(() => {
     if (!id) return;
     (async () => {
-      const { data } = await supabase
-        .from("study_requests")
-        .select("title, status, is_active, profiles ( full_name ), subjects ( name )")
-        .eq("id", id)
-        .single();
+      const container = DIContainer.getInstance();
+      const requestRepo = container.getStudyRequestRepository();
+      const baseRequest = await requestRepo.getById(id);
 
-      if (data) {
-        const d = data as any;
+      if (baseRequest) {
+        const { data: authorData } = await supabase
+          .from("profiles")
+          .select("full_name")
+          .eq("id", baseRequest.author_id)
+          .single();
+
         setRequest({
-          title: d.title,
-          author_name: d.profiles?.full_name ?? "Usuario",
-          subject_name: d.subjects?.name ?? "Materia",
-          status: d.status,
-          is_active: d.is_active,
+          title: baseRequest.title,
+          author_name: authorData?.full_name ?? "Usuario",
+          subject_name: baseRequest.subjects?.name ?? "Materia",
+          status: baseRequest.status,
+          is_active: baseRequest.is_active,
         });
       }
       setLoadingRequest(false);
@@ -85,6 +90,12 @@ export default function PostularScreen() {
     }
     setSending(true);
     try {
+      const existingStatus = await getMyApplicationStatus(id, user.id);
+      if (existingStatus) {
+        Alert.alert("Postulación existente", "Ya te postulaste a esta solicitud.");
+        return;
+      }
+
       await applyToRequest(id, user.id, message.trim());
       Alert.alert(
         "¡Postulación enviada! 🎉",

@@ -8,6 +8,14 @@ interface UseStudyRequestsState {
   data: StudyRequest[]
 }
 
+function toErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof Error) return err.message
+  if (typeof err === "object" && err !== null && "message" in err) {
+    return String((err as { message: unknown }).message)
+  }
+  return fallback
+}
+
 export function useStudyRequests() {
   const container = DIContainer.getInstance()
   const [state, setState] = useState<UseStudyRequestsState>({
@@ -25,7 +33,7 @@ export function useStudyRequests() {
         setState({ loading: false, error: null, data: result })
         return result
       } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : "Error al cargar solicitudes"
+        const errorMsg = toErrorMessage(err, "Error al cargar solicitudes")
         setState({ loading: false, error: errorMsg, data: [] })
         throw err
       }
@@ -41,10 +49,10 @@ export function useStudyRequests() {
       setState((prev) => ({ ...prev, loading: true }))
       try {
         const useCase = container.getCreateStudyRequest()
-        await useCase.execute(userId, payload)
+        await useCase.execute({ userId, ...payload })
         setState((prev) => ({ ...prev, loading: false, error: null }))
       } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : "Error al crear solicitud"
+        const errorMsg = toErrorMessage(err, "Error al crear solicitud")
         setState((prev) => ({ ...prev, loading: false, error: errorMsg }))
         throw err
       }
@@ -56,11 +64,11 @@ export function useStudyRequests() {
     async (requestId: string, userId: string, status: "abierta" | "cerrada" | "expirada") => {
       setState((prev) => ({ ...prev, loading: true }))
       try {
-        const useCase = container.getUpdateStudyRequest()
-        await useCase.execute(requestId, userId, { status })
+        const repository = container.getStudyRequestRepository()
+        await repository.updateStatus(requestId, status)
         setState((prev) => ({ ...prev, loading: false, error: null }))
       } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : "Error al actualizar solicitud"
+        const errorMsg = toErrorMessage(err, "Error al actualizar solicitud")
         setState((prev) => ({ ...prev, loading: false, error: errorMsg }))
         throw err
       }
@@ -68,10 +76,64 @@ export function useStudyRequests() {
     [container]
   )
 
+  const getRequestById = useCallback(
+    async (requestId: string) => {
+      setState((prev) => ({ ...prev, loading: true, error: null }))
+      try {
+        const repository = container.getStudyRequestRepository()
+        const result = await repository.getById(requestId)
+        setState((prev) => ({ ...prev, loading: false }))
+        return result
+      } catch (err) {
+        const errorMsg = toErrorMessage(err, "Error al cargar solicitud")
+        setState((prev) => ({ ...prev, loading: false, error: errorMsg }))
+        throw err
+      }
+    },
+    [container]
+  )
+
+  const isAdmin = useCallback(
+    async (requestId: string, userId: string) => {
+      const repo = container.getStudyRequestRepository()
+      return repo.isAdmin(requestId, userId)
+    },
+    [container]
+  )
+
+  const getAdmins = useCallback(
+    async (requestId: string) => {
+      const repo = container.getStudyRequestRepository()
+      return repo.getAdmins(requestId)
+    },
+    [container]
+  )
+
+  const assignAdmin = useCallback(
+    async (requestId: string, targetUserId: string, actorUserId: string) => {
+      const repo = container.getStudyRequestRepository()
+      return repo.assignAdmin(requestId, targetUserId, actorUserId)
+    },
+    [container]
+  )
+
+  const revokeAdmin = useCallback(
+    async (requestId: string, targetUserId: string, actorUserId: string) => {
+      const repo = container.getStudyRequestRepository()
+      return repo.revokeAdmin(requestId, targetUserId, actorUserId)
+    },
+    [container]
+  )
+
   return {
     ...state,
     getRequests,
+    getRequestById,
     createRequest,
     updateStatus,
+    isAdmin,
+    getAdmins,
+    assignAdmin,
+    revokeAdmin,
   }
 }

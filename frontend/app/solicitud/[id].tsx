@@ -10,20 +10,9 @@
  */
 
 import { Colors } from "@/constants/Colors";
-import {
-  assignRequestAdmin,
-  cancelMyApplication,
-  cancelStudyRequest,
-  getApplicationsForRequest,
-  getRequestAdmins,
-  getMyApplicationStatus,
-  isRequestAdmin,
-  revokeRequestAdmin,
-  reviewApplication,
-  updateRequestStatus,
-  updateRequestContentAsAdmin,
-                    }
-                  from "@/lib/services/careerService";
+import { useApplications } from "@/hooks/application/useApplications";
+import { useStudyRequests } from "@/hooks/application/useStudyRequests";
+import { DIContainer } from "@/lib/services/di/container";
 import { getOrCreateConversation } from "@/lib/services/messagingService";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/store/useAuthStore";
@@ -86,6 +75,18 @@ export default function SolicitudDetailScreen() {
   const C = Colors[scheme];
   const insets = useSafeAreaInsets();
   const user = useAuthStore((s) => s.user);
+  const {
+    getMyApplicationStatus,
+    reviewApplication: reviewApplicationUseCase,
+    cancelMyApplication,
+  } = useApplications();
+  const {
+    isAdmin: checkIsAdmin,
+    getAdmins,
+    assignAdmin,
+    revokeAdmin,
+  } = useStudyRequests();
+  const container = DIContainer.getInstance();
 
   const [request, setRequest] = useState<RequestDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -185,13 +186,14 @@ export default function SolicitudDetailScreen() {
         });
         setDescriptionDraft(r.description ?? "");
 
-        const apps = await getApplicationsForRequest(r.id);
+        const applicationRepo = container.getApplicationRepository();
+        const apps = await applicationRepo.getByRequest(r.id);
         setApplications(apps);
 
         if (user?.id) {
           const [canAdmin, admins] = await Promise.all([
-            isRequestAdmin(r.id, user.id),
-            getRequestAdmins(r.id),
+            checkIsAdmin(r.id, user.id),
+            getAdmins(r.id),
           ]);
           setIsRequestAdminRole(canAdmin);
           setRequestAdmins((admins ?? []).map((a) => a.user_id));
@@ -210,7 +212,7 @@ export default function SolicitudDetailScreen() {
     };
 
     load();
-  }, [id]);
+  }, [container, getMyApplicationStatus, id, user?.id]);
 
   const isOwnPost = request?.author_id === user?.id;
   const canManageRequest = !!isOwnPost || isRequestAdminRole;
@@ -225,8 +227,8 @@ export default function SolicitudDetailScreen() {
   const refreshAdminData = async () => {
     if (!request?.id || !user?.id) return;
     const [canAdmin, admins] = await Promise.all([
-      isRequestAdmin(request.id, user.id),
-      getRequestAdmins(request.id),
+      checkIsAdmin(request.id, user.id),
+      getAdmins(request.id),
     ]);
     setIsRequestAdminRole(canAdmin);
     setRequestAdmins((admins ?? []).map((a) => a.user_id));
@@ -242,7 +244,8 @@ export default function SolicitudDetailScreen() {
 
     setIsSavingDescription(true);
     try {
-      await updateRequestContentAsAdmin(request.id, user.id, { description: clean });
+      const repo = container.getStudyRequestRepository();
+      await repo.updateContent(request.id, user.id, { description: clean });
       setRequest((prev) => (prev ? { ...prev, description: clean } : prev));
       setIsEditingDescription(false);
       Alert.alert("Actualizada", "La descripcion de la solicitud fue actualizada.");
@@ -259,9 +262,9 @@ export default function SolicitudDetailScreen() {
     setUpdatingAdminUserId(targetUserId);
     try {
       if (makeAdmin) {
-        await assignRequestAdmin(request.id, targetUserId, user.id);
+        await assignAdmin(request.id, targetUserId, user.id);
       } else {
-        await revokeRequestAdmin(request.id, targetUserId, user.id);
+        await revokeAdmin(request.id, targetUserId, user.id);
       }
       await refreshAdminData();
     } catch (e: any) {
@@ -285,7 +288,8 @@ export default function SolicitudDetailScreen() {
           onPress: async () => {
             setCancelingAction(true);
             try {
-              await cancelStudyRequest(request.id, user.id);
+              const repo = container.getStudyRequestRepository();
+              await repo.cancel(request.id, user.id);
               setRequest((prev) => (prev ? { ...prev, status: "cerrada" } : prev));
               Alert.alert("Solicitud cancelada", "La solicitud fue cerrada correctamente.", [
                 {
@@ -344,7 +348,7 @@ export default function SolicitudDetailScreen() {
 
     setReviewingApplicationId(applicationId);
     try {
-      await reviewApplication(user.id, applicationId, status);
+      await reviewApplicationUseCase(applicationId, user.id, status);
       const updatedApplications = applications.map((app) =>
         app.id === applicationId ? { ...app, status } : app
       );
@@ -354,7 +358,8 @@ export default function SolicitudDetailScreen() {
       if (status === "aceptada" && request.status === "abierta") {
         const acceptedCount = updatedApplications.filter((app) => app.status === "aceptada").length;
         if (acceptedCount + 1 >= request.max_members) {
-          await updateRequestStatus(request.id, "cerrada");
+          const requestRepo = container.getStudyRequestRepository();
+          await requestRepo.updateStatus(request.id, "cerrada");
           setRequest((prev) => (prev ? { ...prev, status: "cerrada" } : prev));
           Alert.alert("Cupo completo", "La solicitud se cerro automaticamente porque ya se lleno el cupo.");
         }
