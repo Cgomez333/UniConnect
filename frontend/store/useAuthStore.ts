@@ -1,5 +1,4 @@
 import {
-  getMyProfile,
   onAuthStateChange,
   signIn as sbSignIn,
   signOut as sbSignOut,
@@ -35,6 +34,61 @@ interface AuthState {
   initialize: () => () => void;
 }
 
+interface ProfileRow {
+  id: string;
+  full_name: string;
+  avatar_url: string | null;
+  role: UserRole;
+  semester: number | null;
+  bio: string | null;
+}
+
+const buildFallbackUser = (sessionUser: any): UserSession => ({
+  id: sessionUser.id,
+  email: sessionUser.email!,
+  fullName: sessionUser.user_metadata?.full_name ?? "Estudiante",
+  avatarUrl: sessionUser.user_metadata?.avatar_url ?? null,
+  phoneNumber: null,
+  role: "estudiante",
+  semester: null,
+  bio: null,
+});
+
+const normalizeEmail = (email?: string | null) => email?.toLowerCase() ?? "";
+
+const withTimeout = async <T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  fallbackValue: T
+): Promise<T> => {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race<T>([
+      promise,
+      new Promise<T>((resolve) => {
+        timer = setTimeout(() => resolve(fallbackValue), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+};
+
+const fetchProfileByUserId = async (userId: string): Promise<ProfileRow | null> => {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, full_name, avatar_url, role, semester, bio")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error) {
+    console.warn("[authStore] No se pudo obtener perfil completo:", error);
+    return null;
+  }
+
+  return data;
+};
+
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   isLoading: false,
@@ -46,8 +100,9 @@ export const useAuthStore = create<AuthState>((set) => ({
   initialize: () => {
     const processSession = async (session: any) => {
       if (session?.user) {
+        const fallbackUser = buildFallbackUser(session.user);
         try {
-          const email = session.user.email?.toLowerCase();
+          const email = normalizeEmail(session.user.email);
 
           if (!email?.endsWith('@ucaldas.edu.co')) {
             console.warn("[authStore] Usuario rechazado: no es de ucaldas.edu.co -", email);
@@ -56,54 +111,41 @@ export const useAuthStore = create<AuthState>((set) => ({
             return;
           }
 
+          // No bloquear navegación por una consulta lenta de perfil.
           set({
-            user: {
-              id: session.user.id,
-              email: session.user.email!,
-              fullName: session.user.user_metadata?.full_name ?? "Estudiante",
-              avatarUrl: session.user.user_metadata?.avatar_url ?? null,
-              phoneNumber: null,
-              role: "estudiante",
-              semester: null,
-              bio: null,
-            },
+            user: fallbackUser,
             isAuthenticated: true,
             isHydrating: false,
           });
 
-          getMyProfile()
-            .then((profile) => {
-              if (profile) {
-                set((state) => ({
-                  user: state.user ? {
-                    ...state.user,
-                    fullName: profile.full_name,
-                    avatarUrl: profile.avatar_url,
-                    role: profile.role,
-                    semester: profile.semester,
-                    bio: profile.bio,
-                  } : null,
-                }));
-              }
-            })
-            .catch((error) => {
-              console.warn("[authStore] No se pudo obtener perfil completo:", error);
-            });
-
           registerAndSavePushToken(session.user.id).catch(() => {});
+
+          const profile = await withTimeout<ProfileRow | null>(
+            fetchProfileByUserId(session.user.id),
+            3500,
+            null
+          );
+
+          if (profile) {
+            set((state) => {
+              if (!state.user || state.user.id !== session.user.id) return state;
+              return {
+                ...state,
+                user: {
+                  ...state.user,
+                  fullName: profile.full_name,
+                  avatarUrl: profile.avatar_url,
+                  role: profile.role,
+                  semester: profile.semester,
+                  bio: profile.bio,
+                },
+              };
+            });
+          }
         } catch (error) {
           console.warn("[authStore] Error al procesar sesión:", error);
           set({
-            user: {
-              id: session.user.id,
-              email: session.user.email!,
-              fullName: session.user.user_metadata?.full_name ?? "Estudiante",
-              avatarUrl: session.user.user_metadata?.avatar_url ?? null,
-              phoneNumber: null,
-              role: "estudiante",
-              semester: null,
-              bio: null,
-            },
+            user: fallbackUser,
             isAuthenticated: true,
             isHydrating: false,
           });
@@ -124,11 +166,15 @@ export const useAuthStore = create<AuthState>((set) => ({
     })();
 
     const { data: { subscription } } = onAuthStateChange(async (event, session) => {
-      if (event === "SIGNED_IN") {
-        await processSession(session);
-      }
       if (event === "SIGNED_OUT") {
         set({ user: null, isAuthenticated: false, isHydrating: false });
+        return;
+      }
+
+      // En OAuth (Google) pueden llegar eventos distintos a SIGNED_IN
+      // como INITIAL_SESSION o TOKEN_REFRESHED con sesión ya válida.
+      if (session?.user) {
+        await processSession(session);
       }
     });
 
@@ -141,39 +187,36 @@ export const useAuthStore = create<AuthState>((set) => ({
       const { user } = await sbSignIn({ email, password });
       if (!user) throw new Error("No se pudo iniciar sesión");
 
+      const fallbackUser = buildFallbackUser(user);
       set({
-        user: {
-          id: user.id!,
-          email: user.email!,
-          fullName: user.user_metadata?.full_name ?? "Estudiante",
-          avatarUrl: user.user_metadata?.avatar_url ?? null,
-          phoneNumber: null,
-          role: "estudiante",
-          semester: null,
-          bio: null,
-        },
+        user: fallbackUser,
         isAuthenticated: true,
       });
 
-      getMyProfile()
-        .then((profile) => {
-          if (profile) {
-            set((state) => ({
-              user: state.user ? {
-                ...state.user,
-                fullName: profile.full_name,
-                avatarUrl: profile.avatar_url,
-                role: profile.role,
-                semester: profile.semester,
-                bio: profile.bio,
-              } : null,
-            }));
-            registerAndSavePushToken(profile.id).catch(() => {});
-          }
-        })
-        .catch(() => {
-          console.warn("[authStore] No se pudo obtener perfil completo (continuando)");
+      const profile = await withTimeout<ProfileRow | null>(
+        fetchProfileByUserId(user.id),
+        3500,
+        null
+      );
+
+      if (profile) {
+        set((state) => {
+          if (!state.user || state.user.id !== user.id) return state;
+          return {
+            ...state,
+            user: {
+              ...state.user,
+              fullName: profile.full_name,
+              avatarUrl: profile.avatar_url,
+              role: profile.role,
+              semester: profile.semester,
+              bio: profile.bio,
+            },
+          };
         });
+      }
+
+      registerAndSavePushToken(profile?.id ?? user.id).catch(() => {});
     } finally {
       set({ isLoading: false });
     }
