@@ -1,4 +1,6 @@
 import type { IEventRepository } from "../../domain/repositories/IEventRepository"
+import { supabase } from "@/lib/supabase"
+import type { CampusEvent } from "@/types"
 
 /**
  * Supabase implementation of IEventRepository.
@@ -12,5 +14,15 @@ import type { IEventRepository } from "../../domain/repositories/IEventRepositor
  * - delete()
  */
 export class SupabaseEventRepository implements IEventRepository {
-  // TODO: Implement interface methods
+  async getUpcoming(): Promise<CampusEvent[]> {
+    const now = new Date().toISOString()
+    const { data, error } = await supabase
+      .from("events")
+      .select("*, creator:created_by ( full_name )")
+      .gte("event_date", now)
+      .order("event_date", { ascending: true })
+
+    if (error) throw new Error(error.message)
+    return (data ?? []) as CampusEvent[]
+  }
 }

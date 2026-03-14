@@ -1,37 +1,7 @@
 // Hook de datos para el panel de administración.
 // Centraliza la lógica CRUD de todas las entidades del admin.
 
-import {
-  createFaculty,
-  createProgram,
-  createSubject,
-  deleteFaculty as sbDeleteFaculty,
-  deleteProgram as sbDeleteProgram,
-  deleteSubject as sbDeleteSubject,
-  getFaculties,
-  getPrograms,
-  getSubjects,
-  updateFaculty,
-  updateProgram,
-  updateSubject,
-} from "@/lib/services/facultyService"
-import {
-  getAllUsers,
-  getAllRequests,
-  getAllResources,
-  getAdminMetrics,
-  updateUserRole,
-  toggleUserActive,
-  closeRequest as sbCloseRequest,
-  deleteRequest as sbDeleteRequest,
-  deleteResource as sbDeleteResource,
-} from "@/lib/services/adminService"
-import {
-  getAllEvents,
-  createEvent as sbCreateEvent,
-  updateEvent as sbUpdateEvent,
-  deleteEvent as sbDeleteEvent,
-} from "@/lib/services/eventService"
+import { DIContainer } from "@/lib/services/di/container"
 import type {
   AdminEvent,
   AdminMetrics,
@@ -115,6 +85,9 @@ const EVENT_MODAL_INIT: EventModalState = {
  * @returns API completa de datos, modales y acciones para la vista admin.
  */
 export function useAdmin(search: string) {
+  const container = DIContainer.getInstance()
+  const adminGateway = container.getAdminPanelGateway()
+
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -158,14 +131,14 @@ export function useAdmin(search: string) {
     const load = async () => {
       setIsLoading(true)
       const result = await Promise.allSettled([
-        getFaculties(),
-        getPrograms(),
-        getSubjects(),
-        getAllUsers(),
-        getAllRequests(),
-        getAllResources(),
-        getAdminMetrics(),
-        getAllEvents(),
+        adminGateway.getFaculties(),
+        adminGateway.getPrograms(),
+        adminGateway.getSubjects(),
+        adminGateway.getAllUsers(),
+        adminGateway.getAllRequests(),
+        adminGateway.getAllResources(),
+        adminGateway.getAdminMetrics(),
+        adminGateway.getAllEvents(),
       ])
 
       const [facs, progs, subs, usrs, reqs, ress, mets, evts] = result
@@ -201,7 +174,7 @@ export function useAdmin(search: string) {
       setIsLoading(false)
     }
     load()
-  }, [])
+  }, [adminGateway])
 
   // Filtrados
   const filteredFaculties = useMemo(() => {
@@ -280,10 +253,10 @@ export function useAdmin(search: string) {
     setIsSubmitting(true)
     try {
       if (facultyModal.mode === "create") {
-        const nueva = await createFaculty(name)
+        const nueva = await adminGateway.createFaculty(name)
         setFaculties((p) => [...p, nueva])
       } else {
-        const actualizada = await updateFaculty(facultyModal.item!.id, { name })
+        const actualizada = await adminGateway.updateFaculty(facultyModal.item!.id, { name })
         setFaculties((p) =>
           p.map((f) => (f.id === actualizada.id ? actualizada : f))
         )
@@ -315,7 +288,7 @@ export function useAdmin(search: string) {
         {
           text: "Eliminar", style: "destructive", onPress: async () => {
             try {
-              await sbDeleteFaculty(item.id)
+              await adminGateway.deleteFaculty(item.id)
               const progIds = programs.filter((p) => p.faculty_id === item.id).map((p) => p.id)
               setFaculties((p) => p.filter((f) => f.id !== item.id))
               setPrograms((p) => p.filter((p) => p.faculty_id !== item.id))
@@ -358,10 +331,10 @@ export function useAdmin(search: string) {
     try {
       const faculty_name = faculties.find((f) => f.id === faculty_id)?.name ?? ""
       if (programModal.mode === "create") {
-        const nuevo = await createProgram(name, faculty_id)
+        const nuevo = await adminGateway.createProgram(name, faculty_id)
         setPrograms((p) => [...p, { ...nuevo, faculty_name }])
       } else {
-        const actualizado = await updateProgram(programModal.item!.id, { name, faculty_id })
+        const actualizado = await adminGateway.updateProgram(programModal.item!.id, { name, faculty_id })
         setPrograms((p) =>
           p.map((pr) =>
             pr.id === actualizado.id ? { ...actualizado, faculty_name } : pr
@@ -388,7 +361,7 @@ export function useAdmin(search: string) {
         {
           text: "Eliminar", style: "destructive", onPress: async () => {
             try {
-              await sbDeleteProgram(item.id)
+              await adminGateway.deleteProgram(item.id)
               setPrograms((p) => p.filter((p) => p.id !== item.id))
               setSubjects((p) =>
                 p.map((s) => ({
@@ -428,10 +401,10 @@ export function useAdmin(search: string) {
     try {
       const linkedPrograms = programs.filter((p) => program_ids.includes(p.id))
       if (subjectModal.mode === "create") {
-        const nueva = await createSubject(name, program_ids)
+        const nueva = await adminGateway.createSubject(name, program_ids)
         setSubjects((p) => [...p, { ...nueva, programs: linkedPrograms }])
       } else {
-        const actualizada = await updateSubject(subjectModal.item!.id, { name }, program_ids)
+        const actualizada = await adminGateway.updateSubject(subjectModal.item!.id, { name }, program_ids)
         setSubjects((p) =>
           p.map((s) =>
             s.id === actualizada.id ? { ...actualizada, programs: linkedPrograms } : s
@@ -455,7 +428,7 @@ export function useAdmin(search: string) {
         {
           text: "Eliminar", style: "destructive", onPress: async () => {
             try {
-              await sbDeleteSubject(item.id)
+              await adminGateway.deleteSubject(item.id)
               setSubjects((p) => p.filter((s) => s.id !== item.id))
             } catch (error: unknown) {
               Alert.alert("Error", formatAdminError(error))
@@ -517,7 +490,7 @@ export function useAdmin(search: string) {
         {
           text: "Confirmar", onPress: async () => {
             try {
-              await updateUserRole(item.id, newRole)
+              await adminGateway.updateUserRole(item.id, newRole)
               setUsers((p) => p.map((u) => u.id === item.id ? { ...u, role: newRole } : u))
             } catch (e: any) {
               Alert.alert("Error", e.message)
@@ -539,7 +512,7 @@ export function useAdmin(search: string) {
           text: "Confirmar", style: item.is_active ? "destructive" : "default",
           onPress: async () => {
             try {
-              await toggleUserActive(item.id, !item.is_active)
+              await adminGateway.toggleUserActive(item.id, !item.is_active)
               setUsers((p) => p.map((u) => u.id === item.id ? { ...u, is_active: !item.is_active } : u))
             } catch (e: any) {
               Alert.alert("Error", e.message)
@@ -560,7 +533,7 @@ export function useAdmin(search: string) {
         {
           text: "Cerrar", style: "destructive", onPress: async () => {
             try {
-              await sbCloseRequest(item.id)
+              await adminGateway.closeRequest(item.id)
               setRequests((p) => p.map((r) => r.id === item.id ? { ...r, status: "cerrada" } : r))
             } catch (e: any) {
               Alert.alert("Error", e.message)
@@ -580,7 +553,7 @@ export function useAdmin(search: string) {
         {
           text: "Eliminar", style: "destructive", onPress: async () => {
             try {
-              await sbDeleteRequest(item.id)
+              await adminGateway.deleteRequest(item.id)
               setRequests((p) => p.filter((r) => r.id !== item.id))
             } catch (e: any) {
               Alert.alert("Error", e.message)
@@ -601,7 +574,7 @@ export function useAdmin(search: string) {
         {
           text: "Eliminar", style: "destructive", onPress: async () => {
             try {
-              await sbDeleteResource(item.id)
+              await adminGateway.deleteResource(item.id)
               setResources((p) => p.filter((r) => r.id !== item.id))
             } catch (e: any) {
               Alert.alert("Error", e.message)
@@ -648,7 +621,7 @@ export function useAdmin(search: string) {
     setIsSubmitting(true)
     try {
       if (eventModal.mode === "create") {
-        const nuevo = await sbCreateEvent(payload)
+        const nuevo = await adminGateway.createEvent(payload)
         // Construir AdminEvent aplanado
         const adminEvt: AdminEvent = {
           id: nuevo.id,
@@ -663,7 +636,7 @@ export function useAdmin(search: string) {
           (a, b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime()
         ))
       } else {
-        const actualizado = await sbUpdateEvent(eventModal.item!.id, payload)
+        const actualizado = await adminGateway.updateEvent(eventModal.item!.id, payload)
         const adminEvt: AdminEvent = {
           id: actualizado.id,
           title: actualizado.title,
@@ -692,7 +665,7 @@ export function useAdmin(search: string) {
         {
           text: "Eliminar", style: "destructive", onPress: async () => {
             try {
-              await sbDeleteEvent(item.id)
+              await adminGateway.deleteEvent(item.id)
               setEvents((p) => p.filter((e) => e.id !== item.id))
             } catch (e: any) {
               Alert.alert("Error", e.message)

@@ -79,13 +79,27 @@ export class SupabaseStudyResourceRepository implements IStudyResourceRepository
   }
 
   async delete(resourceId: string, userId: string): Promise<void> {
-    const { error: fetchError } = await supabase
+    const { data, error: fetchError } = await supabase
       .from("study_resources")
-      .select("user_id")
+      .select("user_id, file_url")
       .eq("id", resourceId)
       .single()
 
     if (fetchError) throw fetchError
+
+    if (!data || data.user_id !== userId) {
+      throw new Error("No tienes permisos para eliminar este recurso")
+    }
+
+    const fileUrl = typeof data.file_url === "string" ? data.file_url : ""
+    const bucketSegment = "/storage/v1/object/public/resources/"
+    const pathStart = fileUrl.indexOf(bucketSegment)
+
+    if (pathStart !== -1) {
+      const storagePath = fileUrl.substring(pathStart + bucketSegment.length)
+      const { error: storageError } = await supabase.storage.from("resources").remove([storagePath])
+      if (storageError) throw storageError
+    }
 
     await apiDelete("study_resources", (q) => q.eq("id", resourceId).eq("user_id", userId))
   }

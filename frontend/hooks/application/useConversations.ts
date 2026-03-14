@@ -1,4 +1,4 @@
-import { getConversations } from "@/lib/services/messagingService"
+import { DIContainer } from "@/lib/services/di/container"
 import { useAuthStore } from "@/store/useAuthStore"
 import type { Conversation } from "@/types"
 import { useFocusEffect } from "expo-router"
@@ -13,6 +13,7 @@ interface UseConversationsReturn {
 }
 
 export function useConversations(): UseConversationsReturn {
+	const container = DIContainer.getInstance()
 	const user = useAuthStore((s) => s.user)
 
 	const [conversations, setConversations] = useState<Conversation[]>([])
@@ -26,7 +27,8 @@ export function useConversations(): UseConversationsReturn {
 			isRefresh ? setRefreshing(true) : setLoading(true)
 			setError(null)
 			try {
-				const data = await getConversations(user.id)
+				const useCase = container.getGetConversations()
+				const data = await useCase.execute(user.id)
 				setConversations(data)
 			} catch (e) {
 				setError(e instanceof Error ? e.message : "Error al cargar mensajes")
@@ -35,7 +37,7 @@ export function useConversations(): UseConversationsReturn {
 				setRefreshing(false)
 			}
 		},
-		[user?.id]
+		[container, user?.id]
 	)
 
 	useFocusEffect(

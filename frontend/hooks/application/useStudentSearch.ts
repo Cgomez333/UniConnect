@@ -1,8 +1,5 @@
-import { searchStudentsBySubject } from "@/lib/services/studentService"
-import {
-	getEnrolledSubjectsForUser,
-	Subject as FeedSubject,
-} from "@/lib/services/studyRequestsService"
+import { DIContainer } from "@/lib/services/di/container"
+import { useAuthStore } from "@/store/useAuthStore"
 import type { StudentSearchResult } from "@/types"
 import { useCallback, useEffect, useRef, useState } from "react"
 
@@ -10,7 +7,7 @@ const PAGE_SIZE = 20
 
 interface UseStudentSearchReturn {
 	students: StudentSearchResult[]
-	userSubjects: FeedSubject[]
+	userSubjects: { id: string; name: string }[]
 	selectedSubjectId: string | null
 	selectSubject: (subjectId: string | null) => void
 	loading: boolean
@@ -22,8 +19,10 @@ interface UseStudentSearchReturn {
 }
 
 export function useStudentSearch(): UseStudentSearchReturn {
+	const container = DIContainer.getInstance()
+	const user = useAuthStore((s) => s.user)
 	const [students, setStudents] = useState<StudentSearchResult[]>([])
-	const [userSubjects, setUserSubjects] = useState<FeedSubject[]>([])
+	const [userSubjects, setUserSubjects] = useState<{ id: string; name: string }[]>([])
 	const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null)
 	const [loading, setLoading] = useState(false)
 	const [loadingMore, setLoadingMore] = useState(false)
@@ -33,19 +32,34 @@ export function useStudentSearch(): UseStudentSearchReturn {
 	const hasMoreRef = useRef(false)
 
 	useEffect(() => {
-		getEnrolledSubjectsForUser()
+		if (!user?.id) {
+			setUserSubjects([])
+			return
+		}
+
+		const useCase = container.getGetEnrolledSubjectsForUser()
+		useCase
+			.execute(user.id)
 			.then((subjects) => setUserSubjects(subjects))
 			.catch(() => setUserSubjects([]))
-	}, [])
+	}, [container, user?.id])
 
 	const fetchStudents = useCallback(
 		async (subjectId: string, isRefresh = false) => {
+			if (!user?.id) {
+				setError("Sesión no válida.")
+				setStudents([])
+				hasMoreRef.current = false
+				return
+			}
+
 			if (!isRefresh) setLoading(true)
 			setError(null)
 			pageRef.current = 0
 
 			try {
-				const data = await searchStudentsBySubject(subjectId, 0, PAGE_SIZE)
+				const useCase = container.getSearchStudentsBySubject()
+				const data = await useCase.execute(subjectId, user.id, 0, PAGE_SIZE)
 				setStudents(data)
 				hasMoreRef.current = data.length >= PAGE_SIZE
 			} catch (e: unknown) {
@@ -58,7 +72,7 @@ export function useStudentSearch(): UseStudentSearchReturn {
 				setLoading(false)
 			}
 		},
-		[]
+		[container, user?.id]
 	)
 
 	const selectSubject = useCallback(
@@ -75,16 +89,13 @@ export function useStudentSearch(): UseStudentSearchReturn {
 	)
 
 	const loadMore = useCallback(async () => {
-		if (loadingMore || !hasMoreRef.current || !selectedSubjectId) return
+		if (loadingMore || !hasMoreRef.current || !selectedSubjectId || !user?.id) return
 		setLoadingMore(true)
 
 		try {
 			const nextPage = pageRef.current + 1
-			const data = await searchStudentsBySubject(
-				selectedSubjectId,
-				nextPage,
-				PAGE_SIZE
-			)
+			const useCase = container.getSearchStudentsBySubject()
+			const data = await useCase.execute(selectedSubjectId, user.id, nextPage, PAGE_SIZE)
 			if (data.length > 0) {
 				setStudents((prev) => [...prev, ...data])
 				pageRef.current = nextPage
@@ -93,7 +104,7 @@ export function useStudentSearch(): UseStudentSearchReturn {
 		} finally {
 			setLoadingMore(false)
 		}
-	}, [loadingMore, selectedSubjectId])
+	}, [container, loadingMore, selectedSubjectId, user?.id])
 
 	const refresh = useCallback(() => {
 		if (selectedSubjectId) {

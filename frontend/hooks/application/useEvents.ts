@@ -1,10 +1,11 @@
-import { getUpcomingEvents } from "@/lib/services/eventService"
+import { DIContainer } from "@/lib/services/di/container"
 import type { CampusEvent, EventCategory } from "@/types"
 import { useCallback, useEffect, useMemo, useState } from "react"
 
 export type EventFilter = EventCategory | "todos"
 
 export function useEvents() {
+  const container = DIContainer.getInstance()
   const [events, setEvents] = useState<CampusEvent[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -15,7 +16,8 @@ export function useEvents() {
     else setIsLoading(true)
 
     try {
-      const data = await getUpcomingEvents()
+      const useCase = container.getGetUpcomingEvents()
+      const data = await useCase.execute()
       setEvents(data)
     } catch {
       setEvents([])
@@ -23,7 +25,7 @@ export function useEvents() {
       setIsLoading(false)
       setIsRefreshing(false)
     }
-  }, [])
+  }, [container])
 
   useEffect(() => {
     load()

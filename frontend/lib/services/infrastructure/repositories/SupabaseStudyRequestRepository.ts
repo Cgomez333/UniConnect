@@ -4,6 +4,61 @@ import type { IStudyRequestRepository } from "../../domain/repositories/IStudyRe
 import type { StudyRequest } from "@/types"
 
 export class SupabaseStudyRequestRepository implements IStudyRequestRepository {
+  async getEnrolledSubjects(userId: string): Promise<import("@/lib/services/domain/repositories/IStudyRequestRepository").UserSubjectCatalogItem[]> {
+    const { data, error } = await supabase
+      .from("user_subjects")
+      .select(
+        `
+      subject_id,
+      subjects (
+        id,
+        name
+      )
+    `
+      )
+      .eq("user_id", userId)
+
+    if (error) throw new Error(error.message || "No se pudieron cargar tus materias.")
+
+    const rows: any[] = data ?? []
+    const subjectRecord: Record<string, { id: string; name: string }> = {}
+
+    for (let i = 0; i < rows.length; i++) {
+      const subjectsField = rows[i].subjects
+      const subjectList = Array.isArray(subjectsField) ? subjectsField : subjectsField ? [subjectsField] : []
+
+      for (let j = 0; j < subjectList.length; j++) {
+        const s = subjectList[j]
+        if (!s || !s.id) continue
+        const sid = String(s.id)
+        if (!subjectRecord[sid]) {
+          subjectRecord[sid] = { id: sid, name: String(s.name) }
+        }
+      }
+    }
+
+    return Object.values(subjectRecord).sort((a, b) => a.name.localeCompare(b.name))
+  }
+
+  async getAvailableSubjectsForUser(userId: string): Promise<import("@/lib/services/domain/repositories/IStudyRequestRepository").UserSubjectCatalogItem[]> {
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", userId)
+      .single()
+
+    if (profileError) throw profileError
+
+    if (profile?.role === "admin") {
+      const { data, error } = await supabase.from("subjects").select("id, name").eq("is_active", true).order("name")
+
+      if (error) throw error
+      return (data ?? []) as { id: string; name: string }[]
+    }
+
+    return this.getEnrolledSubjects(userId)
+  }
+
   async getById(id: string): Promise<StudyRequest | null> {
     const { data, error } = await supabase
       .from("study_requests")

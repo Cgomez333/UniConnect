@@ -1,4 +1,5 @@
 export { GetAllEvents } from "./GetAllEvents"
+export { GetUpcomingEvents } from "./GetUpcomingEvents"
 export { GetEventById } from "./GetEventById"
 export { CreateEvent } from "./CreateEvent"
 export { UpdateEvent } from "./UpdateEvent"

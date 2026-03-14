@@ -1,8 +1,4 @@
-import {
-	uploadResource,
-	validateFileFormat,
-	validateFileSize,
-} from "@/lib/services/resourceService"
+import { DIContainer } from "@/lib/services/di/container"
 import { useAuthStore } from "@/store/useAuthStore"
 import type { CreateStudyResourcePayload, StudyResource } from "@/types"
 import { useCallback, useState } from "react"
@@ -20,21 +16,23 @@ interface UseUploadResourceReturn {
 }
 
 export function useUploadResource(): UseUploadResourceReturn {
+	const container = DIContainer.getInstance()
 	const user = useAuthStore((s) => s.user)
 	const [uploading, setUploading] = useState(false)
 	const [error, setError] = useState<string | null>(null)
 
 	const validateFile = useCallback(
 		(fileName: string, sizeBytes: number): string | null => {
-			if (!validateFileFormat(fileName)) {
+			const useCase = container.getUploadResourceFromDevice()
+			if (!useCase.validateFileFormat(fileName)) {
 				return "Formato no permitido. Usa: pdf, docx, xlsx, pptx, txt, jpg, png."
 			}
-			if (!validateFileSize(sizeBytes)) {
+			if (!useCase.validateFileSize(sizeBytes)) {
 				return "El archivo excede el máximo de 10 MB."
 			}
 			return null
 		},
-		[]
+		[container]
 	)
 
 	const upload = useCallback(
@@ -53,7 +51,8 @@ export function useUploadResource(): UseUploadResourceReturn {
 			setError(null)
 
 			try {
-				const resource = await uploadResource(user.id, payload)
+				const useCase = container.getUploadResourceFromDevice()
+				const resource = await useCase.execute(user.id, payload)
 				return resource
 			} catch (e: unknown) {
 				const msg = e instanceof Error ? e.message : "Error al subir recurso."
@@ -63,7 +62,7 @@ export function useUploadResource(): UseUploadResourceReturn {
 				setUploading(false)
 			}
 		},
-		[user]
+		[container, user]
 	)
 
 	return { uploading, error, upload, validateFile }

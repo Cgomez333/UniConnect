@@ -6,3 +6,8 @@ export { SupabaseConversationRepository } from "./SupabaseConversationRepository
 export { SupabaseStudyGroupRepository } from "./SupabaseStudyGroupRepository"
 export { SupabaseStudyResourceRepository } from "./SupabaseStudyResourceRepository"
 export { SupabaseAuthRepository } from "./SupabaseAuthRepository"
+export { SupabaseStudentRepository } from "./SupabaseStudentRepository"
+export { SupabaseProfileRepository } from "./SupabaseProfileRepository"
+export { SupabaseFacultyCatalogRepository } from "./SupabaseFacultyCatalogRepository"
+export { SupabaseResourceUploadRepository } from "./SupabaseResourceUploadRepository"
+export { SupabaseAdminPanelRepository } from "./SupabaseAdminPanelRepository"

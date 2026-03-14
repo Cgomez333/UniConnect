@@ -1,9 +1,4 @@
-import { getMyRequests } from "@/lib/services/careerService"
-import {
-	getMyPrograms,
-	getMySubjects,
-	getProfile,
-} from "@/lib/services/profileService"
+import { DIContainer } from "@/lib/services/di/container"
 import { useAuthStore } from "@/store/useAuthStore"
 import type { StudyRequest, UserProgram, UserSubject } from "@/types"
 import { useFocusEffect } from "expo-router"
@@ -23,6 +18,7 @@ interface UseProfileReturn {
 }
 
 export function useProfile(): UseProfileReturn {
+	const container = DIContainer.getInstance()
 	const user = useAuthStore((s) => s.user)
 
 	const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
@@ -39,11 +35,16 @@ export function useProfile(): UseProfileReturn {
 			const load = async () => {
 				setIsLoading(true)
 				try {
+					const getProfileByUserId = container.getGetProfileByUserId()
+					const getMyProgramsUseCase = container.getGetMyPrograms()
+					const getMySubjectsUseCase = container.getGetMySubjects()
+					const getRequestsByAuthor = container.getGetStudyRequestsByAuthor()
+
 					const [profile, progs, subs, reqs] = await Promise.all([
-						getProfile(user.id),
-						getMyPrograms(user.id),
-						getMySubjects(user.id),
-						getMyRequests(user.id),
+						getProfileByUserId.execute(user.id),
+						getMyProgramsUseCase.execute(user.id),
+						getMySubjectsUseCase.execute(user.id),
+						getRequestsByAuthor.execute(user.id),
 					])
 					setAvatarUrl(profile?.avatar_url ?? null)
 					setPhoneNumber(profile?.phone_number ?? null)
@@ -56,7 +57,7 @@ export function useProfile(): UseProfileReturn {
 			}
 
 			load()
-		}, [user?.id])
+		}, [container, user?.id])
 	)
 
 	const initials = (user?.fullName ?? "UC")

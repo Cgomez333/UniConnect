@@ -6,6 +6,11 @@ import { SupabaseConversationRepository } from "../infrastructure/repositories/S
 import { SupabaseEventRepository } from "../infrastructure/repositories/SupabaseEventRepository"
 import { SupabaseStudyGroupRepository } from "../infrastructure/repositories/SupabaseStudyGroupRepository"
 import { SupabaseAuthRepository } from "../infrastructure/repositories/SupabaseAuthRepository"
+import { SupabaseStudentRepository } from "../infrastructure/repositories/SupabaseStudentRepository"
+import { SupabaseProfileRepository } from "../infrastructure/repositories/SupabaseProfileRepository"
+import { SupabaseFacultyCatalogRepository } from "../infrastructure/repositories/SupabaseFacultyCatalogRepository"
+import { SupabaseResourceUploadRepository } from "../infrastructure/repositories/SupabaseResourceUploadRepository"
+import { SupabaseAdminPanelRepository } from "../infrastructure/repositories/SupabaseAdminPanelRepository"
 import type { IStudyRequestRepository } from "../domain/repositories/IStudyRequestRepository"
 import type { IApplicationRepository } from "../domain/repositories/IApplicationRepository"
 import type { IStudyResourceRepository } from "../domain/repositories/IStudyResourceRepository"
@@ -14,12 +19,19 @@ import type { IConversationRepository } from "../domain/repositories/IConversati
 import type { IEventRepository } from "../domain/repositories/IEventRepository"
 import type { IStudyGroupRepository } from "../domain/repositories/IStudyGroupRepository"
 import type { IAuthRepository } from "../domain/repositories/IAuthRepository"
+import type { IStudentRepository } from "../domain/repositories/IStudentRepository"
+import type { IProfileRepository } from "../domain/repositories/IProfileRepository"
+import type { IFacultyCatalogRepository } from "../domain/repositories/IFacultyCatalogRepository"
+import type { IResourceUploadRepository } from "../domain/repositories/IResourceUploadRepository"
+import type { IAdminPanelRepository } from "../domain/repositories/IAdminPanelRepository"
 
 import { GetFeedRequests } from "../domain/use-cases/study-requests/GetFeedRequests"
 import { CreateStudyRequest } from "../domain/use-cases/study-requests/CreateStudyRequest"
 import { UpdateStudyRequest } from "../domain/use-cases/study-requests/UpdateStudyRequest"
 import { GetStudyRequestById } from "../domain/use-cases/study-requests/GetStudyRequestById"
 import { GetStudyRequestsByAuthor } from "../domain/use-cases/study-requests/GetStudyRequestsByAuthor"
+import { GetEnrolledSubjectsForUser } from "../domain/use-cases/study-requests/GetEnrolledSubjectsForUser"
+import { GetAvailableSubjectsForUser } from "../domain/use-cases/study-requests/GetAvailableSubjectsForUser"
 import { UpdateStudyRequestStatus } from "../domain/use-cases/study-requests/UpdateStudyRequestStatus"
 import { IsStudyRequestAdmin } from "../domain/use-cases/study-requests/IsStudyRequestAdmin"
 import { GetStudyRequestAdmins } from "../domain/use-cases/study-requests/GetStudyRequestAdmins"
@@ -41,6 +53,7 @@ import { UploadStudyResource } from "../domain/use-cases/resources/UploadStudyRe
 import { GetStudyResourcesByUser } from "../domain/use-cases/resources/GetStudyResourcesByUser"
 import { GetStudyResourceById } from "../domain/use-cases/resources/GetStudyResourceById"
 import { UpdateStudyResource } from "../domain/use-cases/resources/UpdateStudyResource"
+import { DeleteStudyResource } from "../domain/use-cases/resources/DeleteStudyResource"
 
 import { GetConversations } from "../domain/use-cases/messaging/GetConversations"
 import { GetMessages } from "../domain/use-cases/messaging/GetMessages"
@@ -55,6 +68,21 @@ import { GetMyAuthProfile } from "../domain/use-cases/auth/GetMyAuthProfile"
 import { SubscribeAuthStateChanges } from "../domain/use-cases/auth/SubscribeAuthStateChanges"
 import { GetOAuthSignInUrl } from "../domain/use-cases/auth/GetOAuthSignInUrl"
 import { ResolveSessionFromOAuthUrl } from "../domain/use-cases/auth/ResolveSessionFromOAuthUrl"
+import { GetUpcomingEvents } from "../domain/use-cases/events/GetUpcomingEvents"
+import { SearchStudentsBySubject } from "../domain/use-cases/students/SearchStudentsBySubject"
+import { GetStudentPublicProfile } from "../domain/use-cases/students/GetStudentPublicProfile"
+import { UploadResourceFromDevice } from "../domain/use-cases/resources/UploadResourceFromDevice"
+import { GetProfileByUserId } from "../domain/use-cases/profile/GetProfileByUserId"
+import { GetMyPrograms } from "../domain/use-cases/profile/GetMyPrograms"
+import { GetMySubjects } from "../domain/use-cases/profile/GetMySubjects"
+import { UpdateMyProfile } from "../domain/use-cases/profile/UpdateMyProfile"
+import { UploadMyAvatar } from "../domain/use-cases/profile/UploadMyAvatar"
+import { AddMySubject } from "../domain/use-cases/profile/AddMySubject"
+import { RemoveMySubject } from "../domain/use-cases/profile/RemoveMySubject"
+import { SetPrimaryProgram } from "../domain/use-cases/profile/SetPrimaryProgram"
+import { GetPrograms } from "../domain/use-cases/faculty-catalog/GetPrograms"
+import { GetSubjectsByProgram } from "../domain/use-cases/faculty-catalog/GetSubjectsByProgram"
+import { AdminPanelGateway } from "../domain/use-cases/admin/AdminPanelGateway"
 
 /**
  * Dependency Injection Container
@@ -76,6 +104,11 @@ export class DIContainer {
   private eventRepo?: SupabaseEventRepository
   private studyGroupRepo?: SupabaseStudyGroupRepository
   private authRepo?: SupabaseAuthRepository
+  private studentRepo?: SupabaseStudentRepository
+  private profileRepo?: SupabaseProfileRepository
+  private facultyCatalogRepo?: SupabaseFacultyCatalogRepository
+  private resourceUploadRepo?: SupabaseResourceUploadRepository
+  private adminPanelRepo?: SupabaseAdminPanelRepository
 
   // Use Cases - lazy initialized
   private getFeedRequests?: GetFeedRequests
@@ -83,6 +116,8 @@ export class DIContainer {
   private updateStudyRequest?: UpdateStudyRequest
   private getStudyRequestById?: GetStudyRequestById
   private getStudyRequestsByAuthor?: GetStudyRequestsByAuthor
+  private getEnrolledSubjectsForUser?: GetEnrolledSubjectsForUser
+  private getAvailableSubjectsForUser?: GetAvailableSubjectsForUser
   private updateStudyRequestStatus?: UpdateStudyRequestStatus
   private isStudyRequestAdmin?: IsStudyRequestAdmin
   private getStudyRequestAdmins?: GetStudyRequestAdmins
@@ -103,6 +138,7 @@ export class DIContainer {
   private getStudyResourcesByUser?: GetStudyResourcesByUser
   private getStudyResourceById?: GetStudyResourceById
   private updateStudyResource?: UpdateStudyResource
+  private deleteStudyResource?: DeleteStudyResource
   private getConversations?: GetConversations
   private getMessages?: GetMessages
   private sendMessage?: SendMessage
@@ -116,6 +152,21 @@ export class DIContainer {
   private subscribeAuthStateChanges?: SubscribeAuthStateChanges
   private getOAuthSignInUrl?: GetOAuthSignInUrl
   private resolveSessionFromOAuthUrl?: ResolveSessionFromOAuthUrl
+  private getUpcomingEvents?: GetUpcomingEvents
+  private searchStudentsBySubject?: SearchStudentsBySubject
+  private getStudentPublicProfile?: GetStudentPublicProfile
+  private getProfileByUserId?: GetProfileByUserId
+  private getMyPrograms?: GetMyPrograms
+  private getMySubjects?: GetMySubjects
+  private updateMyProfile?: UpdateMyProfile
+  private uploadMyAvatar?: UploadMyAvatar
+  private addMySubject?: AddMySubject
+  private removeMySubject?: RemoveMySubject
+  private setPrimaryProgram?: SetPrimaryProgram
+  private getPrograms?: GetPrograms
+  private getSubjectsByProgram?: GetSubjectsByProgram
+  private uploadResourceFromDevice?: UploadResourceFromDevice
+  private adminPanelGateway?: AdminPanelGateway
 
   private constructor() {}
 
@@ -184,6 +235,41 @@ export class DIContainer {
     return this.authRepo
   }
 
+  getStudentRepository(): IStudentRepository {
+    if (!this.studentRepo) {
+      this.studentRepo = new SupabaseStudentRepository()
+    }
+    return this.studentRepo
+  }
+
+  getProfileRepository(): IProfileRepository {
+    if (!this.profileRepo) {
+      this.profileRepo = new SupabaseProfileRepository()
+    }
+    return this.profileRepo
+  }
+
+  getFacultyCatalogRepository(): IFacultyCatalogRepository {
+    if (!this.facultyCatalogRepo) {
+      this.facultyCatalogRepo = new SupabaseFacultyCatalogRepository()
+    }
+    return this.facultyCatalogRepo
+  }
+
+  getResourceUploadRepository(): IResourceUploadRepository {
+    if (!this.resourceUploadRepo) {
+      this.resourceUploadRepo = new SupabaseResourceUploadRepository()
+    }
+    return this.resourceUploadRepo
+  }
+
+  getAdminPanelRepository(): IAdminPanelRepository {
+    if (!this.adminPanelRepo) {
+      this.adminPanelRepo = new SupabaseAdminPanelRepository()
+    }
+    return this.adminPanelRepo
+  }
+
   // ── Use Case Getters: Study Requests ──────────────────────────────────────
 
   getGetFeedRequests(): GetFeedRequests {
@@ -219,6 +305,20 @@ export class DIContainer {
       this.getStudyRequestsByAuthor = new GetStudyRequestsByAuthor(this.getStudyRequestRepository())
     }
     return this.getStudyRequestsByAuthor
+  }
+
+  getGetEnrolledSubjectsForUser(): GetEnrolledSubjectsForUser {
+    if (!this.getEnrolledSubjectsForUser) {
+      this.getEnrolledSubjectsForUser = new GetEnrolledSubjectsForUser(this.getStudyRequestRepository())
+    }
+    return this.getEnrolledSubjectsForUser
+  }
+
+  getGetAvailableSubjectsForUser(): GetAvailableSubjectsForUser {
+    if (!this.getAvailableSubjectsForUser) {
+      this.getAvailableSubjectsForUser = new GetAvailableSubjectsForUser(this.getStudyRequestRepository())
+    }
+    return this.getAvailableSubjectsForUser
   }
 
   getUpdateStudyRequestStatus(): UpdateStudyRequestStatus {
@@ -371,6 +471,13 @@ export class DIContainer {
     return this.updateStudyResource
   }
 
+  getDeleteStudyResource(): DeleteStudyResource {
+    if (!this.deleteStudyResource) {
+      this.deleteStudyResource = new DeleteStudyResource(this.getStudyResourceRepository())
+    }
+    return this.deleteStudyResource
+  }
+
   // ── Use Case Getters: Messaging ───────────────────────────────────────────
 
   getGetConversations(): GetConversations {
@@ -464,5 +571,110 @@ export class DIContainer {
       this.resolveSessionFromOAuthUrl = new ResolveSessionFromOAuthUrl(this.getAuthRepository())
     }
     return this.resolveSessionFromOAuthUrl
+  }
+
+  getGetUpcomingEvents(): GetUpcomingEvents {
+    if (!this.getUpcomingEvents) {
+      this.getUpcomingEvents = new GetUpcomingEvents(this.getEventRepository())
+    }
+    return this.getUpcomingEvents
+  }
+
+  getSearchStudentsBySubject(): SearchStudentsBySubject {
+    if (!this.searchStudentsBySubject) {
+      this.searchStudentsBySubject = new SearchStudentsBySubject(this.getStudentRepository())
+    }
+    return this.searchStudentsBySubject
+  }
+
+  getGetStudentPublicProfile(): GetStudentPublicProfile {
+    if (!this.getStudentPublicProfile) {
+      this.getStudentPublicProfile = new GetStudentPublicProfile(this.getStudentRepository())
+    }
+    return this.getStudentPublicProfile
+  }
+
+  getGetProfileByUserId(): GetProfileByUserId {
+    if (!this.getProfileByUserId) {
+      this.getProfileByUserId = new GetProfileByUserId(this.getProfileRepository())
+    }
+    return this.getProfileByUserId
+  }
+
+  getGetMyPrograms(): GetMyPrograms {
+    if (!this.getMyPrograms) {
+      this.getMyPrograms = new GetMyPrograms(this.getProfileRepository())
+    }
+    return this.getMyPrograms
+  }
+
+  getGetMySubjects(): GetMySubjects {
+    if (!this.getMySubjects) {
+      this.getMySubjects = new GetMySubjects(this.getProfileRepository())
+    }
+    return this.getMySubjects
+  }
+
+  getUpdateMyProfile(): UpdateMyProfile {
+    if (!this.updateMyProfile) {
+      this.updateMyProfile = new UpdateMyProfile(this.getProfileRepository())
+    }
+    return this.updateMyProfile
+  }
+
+  getUploadMyAvatar(): UploadMyAvatar {
+    if (!this.uploadMyAvatar) {
+      this.uploadMyAvatar = new UploadMyAvatar(this.getProfileRepository())
+    }
+    return this.uploadMyAvatar
+  }
+
+  getAddMySubject(): AddMySubject {
+    if (!this.addMySubject) {
+      this.addMySubject = new AddMySubject(this.getProfileRepository())
+    }
+    return this.addMySubject
+  }
+
+  getRemoveMySubject(): RemoveMySubject {
+    if (!this.removeMySubject) {
+      this.removeMySubject = new RemoveMySubject(this.getProfileRepository())
+    }
+    return this.removeMySubject
+  }
+
+  getSetPrimaryProgram(): SetPrimaryProgram {
+    if (!this.setPrimaryProgram) {
+      this.setPrimaryProgram = new SetPrimaryProgram(this.getProfileRepository())
+    }
+    return this.setPrimaryProgram
+  }
+
+  getGetPrograms(): GetPrograms {
+    if (!this.getPrograms) {
+      this.getPrograms = new GetPrograms(this.getFacultyCatalogRepository())
+    }
+    return this.getPrograms
+  }
+
+  getGetSubjectsByProgram(): GetSubjectsByProgram {
+    if (!this.getSubjectsByProgram) {
+      this.getSubjectsByProgram = new GetSubjectsByProgram(this.getFacultyCatalogRepository())
+    }
+    return this.getSubjectsByProgram
+  }
+
+  getUploadResourceFromDevice(): UploadResourceFromDevice {
+    if (!this.uploadResourceFromDevice) {
+      this.uploadResourceFromDevice = new UploadResourceFromDevice(this.getResourceUploadRepository())
+    }
+    return this.uploadResourceFromDevice
+  }
+
+  getAdminPanelGateway(): AdminPanelGateway {
+    if (!this.adminPanelGateway) {
+      this.adminPanelGateway = new AdminPanelGateway(this.getAdminPanelRepository())
+    }
+    return this.adminPanelGateway
   }
 }
