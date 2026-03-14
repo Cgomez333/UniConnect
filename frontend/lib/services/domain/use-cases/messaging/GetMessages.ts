@@ -1,12 +1,22 @@
-/**
- * Use case: Get messages for conversation.
- * 
- * TODO: Implement
- * - Validate user is participant
- * - Query repository with pagination
- * - Return messages in chronological order
- */
+import type { IMessageRepository } from "../../repositories/IMessageRepository"
+import type { Message } from "@/types"
+
 export class GetMessages {
-  // TODO: constructor(private repo: IMessageRepository) {}
-  // TODO: async execute(conversationId: string, page?: number): Promise<Message[]>
+  constructor(private repository: IMessageRepository) {}
+
+  async execute(conversationId: string, limit = 50, offset = 0): Promise<Message[]> {
+    if (!conversationId || conversationId.trim().length === 0) {
+      throw new Error("Conversation ID is required")
+    }
+
+    if (limit < 1 || limit > 100) {
+      throw new Error("Limit must be between 1 and 100")
+    }
+
+    if (offset < 0) {
+      throw new Error("Offset cannot be negative")
+    }
+
+    return this.repository.getByConversation(conversationId, limit, offset)
+  }
 }

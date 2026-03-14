@@ -1,12 +1,14 @@
-/**
- * Use case: Get conversations for user (US-016).
- * 
- * TODO: Implement
- * - Validate user is authenticated
- * - Query repository with pagination
- * - Return conversations with last message info
- */
+import type { IConversationRepository } from "../../repositories/IConversationRepository"
+import type { Conversation } from "@/types"
+
 export class GetConversations {
-  // TODO: constructor(private repo: IConversationRepository) {}
-  // TODO: async execute(page?: number): Promise<Conversation[]>
+  constructor(private repository: IConversationRepository) {}
+
+  async execute(userId: string): Promise<Conversation[]> {
+    if (!userId || userId.trim().length === 0) {
+      throw new Error("User ID is required")
+    }
+
+    return this.repository.getByUser(userId)
+  }
 }

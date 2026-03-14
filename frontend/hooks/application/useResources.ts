@@ -1,18 +1,74 @@
-/**
- * hooks/application/useResources.ts
- * 
- * Hook que orquesta la lógica de recursos de estudio.
- * Maneja US-006.
- * 
- * TODO: Implement
- * - getResourcesBySubject(subjectId) - list resources
- * - uploadResource(file, subjectId) - upload with progress
- * - Handle file validation
- * - Handle loading, error, success states
- * - Convert domain errors to UI messages
- */
+import { useState, useCallback } from "react"
+import { DIContainer } from "@/lib/services/di/container"
+import type { StudyResource } from "@/types"
+
+interface UseResourcesState {
+  loading: boolean
+  error: string | null
+  data: StudyResource[]
+}
+
 export function useResources() {
+  const container = DIContainer.getInstance()
+  const [state, setState] = useState<UseResourcesState>({
+    loading: false,
+    error: null,
+    data: [],
+  })
+
+  const getResourcesBySubject = useCallback(
+    async (subjectId: string) => {
+      setState({ loading: true, error: null, data: [] })
+      try {
+        const useCase = container.getGetStudyResourcesBySubject()
+        const result = await useCase.execute(subjectId)
+        setState({ loading: false, error: null, data: result })
+        return result
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : "Error al cargar recursos"
+        setState({ loading: false, error: errorMsg, data: [] })
+        throw err
+      }
+    },
+    [container]
+  )
+
+  const uploadResource = useCallback(
+    async (
+      userId: string,
+      programId: string,
+      payload: {
+        subject_id: string
+        title: string
+        description?: string
+        file_url: string
+        file_name: string
+        file_type?: string
+        file_size_kb?: number
+      }
+    ) => {
+      setState((prev) => ({ ...prev, loading: true }))
+      try {
+        const useCase = container.getUploadStudyResource()
+        const result = await useCase.execute({
+          userId,
+          programId,
+          ...payload,
+        })
+        setState((prev) => ({ ...prev, loading: false, error: null }))
+        return result
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : "Error al cargar recurso"
+        setState((prev) => ({ ...prev, loading: false, error: errorMsg }))
+        throw err
+      }
+    },
+    [container]
+  )
+
   return {
-    // TODO: Implement
+    ...state,
+    getResourcesBySubject,
+    uploadResource,
   }
 }

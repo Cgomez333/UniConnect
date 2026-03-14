@@ -1,13 +1,12 @@
-import type { Message } from "../entities/Message"
+import type { Message } from "@/types"
 
 /**
  * Interface for Message repository.
- * Defines contract for messaging data access.
+ * Defines contract for message data access (US-015/016).
  */
 export interface IMessageRepository {
-  // TODO: Define methods
-  // - getById(id: string): Promise<Message | null>
-  // - getByConversation(conversationId: string, page?: number): Promise<Message[]>
-  // - create(message: Message): Promise<void>
-  // - markAsRead(id: string): Promise<void>
+  getById(id: string): Promise<Message | null>
+  getByConversation(conversationId: string, limit?: number, offset?: number): Promise<Message[]>
+  create(conversationId: string, senderId: string, content: string): Promise<Message>
+  markAsRead(messageId: string): Promise<void>
 }

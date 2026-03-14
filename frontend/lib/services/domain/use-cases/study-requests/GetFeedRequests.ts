@@ -1,12 +1,10 @@
-/**
- * Use case: Get all study requests (feed).
- * 
- * TODO: Implement
- * - Validate user is authenticated
- * - Call repository with filters
- * - Return transformed data
- */
+import type { IStudyRequestRepository } from "../../repositories/IStudyRequestRepository"
+import type { StudyRequest } from "@/types" // Use existing types from types/index.ts
+
 export class GetFeedRequests {
-  // TODO: constructor(private repo: IStudyRequestRepository) {}
-  // TODO: async execute(filters: FeedFilters): Promise<StudyRequest[]>
+  constructor(private repository: IStudyRequestRepository) {}
+
+  async execute(filters?: { subject_id?: string; search?: string }, page = 0, pageSize = 10): Promise<StudyRequest[]> {
+    return this.repository.getFeed(filters, page, pageSize)
+  }
 }

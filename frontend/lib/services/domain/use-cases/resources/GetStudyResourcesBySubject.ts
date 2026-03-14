@@ -1,11 +1,14 @@
-/**
- * Use case: Get study resources by subject (US-006).
- * 
- * TODO: Implement
- * - Query repository by subject
- * - Return list of resources with metadata
- */
+import type { IStudyResourceRepository } from "../../repositories/IStudyResourceRepository"
+import type { StudyResource } from "@/types"
+
 export class GetStudyResourcesBySubject {
-  // TODO: constructor(private repo: IStudyResourceRepository) {}
-  // TODO: async execute(subjectId: string): Promise<StudyResource[]>
+  constructor(private repository: IStudyResourceRepository) {}
+
+  async execute(subjectId: string): Promise<StudyResource[]> {
+    if (!subjectId || subjectId.trim().length === 0) {
+      throw new Error("Subject ID is required")
+    }
+
+    return this.repository.getBySubject(subjectId)
+  }
 }

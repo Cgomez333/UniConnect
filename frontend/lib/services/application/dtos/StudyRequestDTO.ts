@@ -1,25 +1,31 @@
-/**
- * DTOs (Data Transfer Objects) para Study Requests
- * Se usan para transferencias entre layers y HTTP responses
- * 
- * TODO: Definir DTOs
- * - CreateStudyRequestDTO (input)
- * - UpdateStudyRequestDTO (input)
- * - StudyRequestResponseDTO (output)
- * - FeedStudyRequestDTO (output para feed)
- */
 export interface CreateStudyRequestDTO {
-  // TODO: fields
+  title: string
+  description: string
+  subject_id: string
+  max_members: number
 }
 
 export interface UpdateStudyRequestDTO {
-  // TODO: fields
+  title?: string
+  description?: string
+  status?: "abierta" | "cerrada" | "expirada"
 }
 
 export interface StudyRequestResponseDTO {
-  // TODO: fields
+  id: string
+  author_id: string
+  subject_id: string
+  title: string
+  description: string
+  max_members: number
+  status: "abierta" | "cerrada" | "expirada"
+  is_active: boolean
+  created_at: string
+  updated_at?: string
+  subject_name: string
+  applications_count?: number
 }
 
-export interface FeedStudyRequestDTO {
-  // TODO: fields
+export interface FeedStudyRequestDTO extends StudyRequestResponseDTO {
+  faculty_name?: string
 }

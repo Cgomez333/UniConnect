@@ -1,19 +1,22 @@
-/**
- * DTOs para Applications
- * 
- * TODO: Definir DTOs
- * - ApplyToRequestDTO (input)
- * - ReviewApplicationDTO (input)
- * - ApplicationResponseDTO (output)
- */
 export interface ApplyToRequestDTO {
-  // TODO: fields
+  request_id: string
+  message: string
 }
 
 export interface ReviewApplicationDTO {
-  // TODO: fields
+  application_id: string
+  decision: "aceptada" | "rechazada"
 }
 
 export interface ApplicationResponseDTO {
-  // TODO: fields
+  id: string
+  request_id: string
+  applicant_id: string
+  message: string
+  status: "pendiente" | "aceptada" | "rechazada"
+  reviewed_at?: string
+  created_at: string
+  applicant_name?: string
+  applicant_avatar?: string | null
+  request_title?: string
 }

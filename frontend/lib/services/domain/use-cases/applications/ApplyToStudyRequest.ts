@@ -1,14 +1,25 @@
-/**
- * Use case: Apply to study request (US-011).
- * 
- * TODO: Implement
- * - Validate user is authenticated
- * - Validate study request exists
- * - Prevent duplicate applications
- * - Create application entity with PENDING status
- * - Save via repository
- */
+import type { IApplicationRepository } from "../../repositories/IApplicationRepository"
+import { ValidationError } from "../../errors"
+import type { Application } from "@/types"
+
+interface ApplyInput {
+  requestId: string
+  applicantId: string
+  message: string
+}
+
 export class ApplyToStudyRequest {
-  // TODO: constructor(private repo: IApplicationRepository) {}
-  // TODO: async execute(payload: ApplyPayload): Promise<Application>
+  constructor(private repository: IApplicationRepository) {}
+
+  async execute(input: ApplyInput): Promise<Application> {
+    this.validate(input)
+    return this.repository.create(input.requestId, input.applicantId, input.message)
+  }
+
+  private validate(input: ApplyInput): void {
+    if (!input.requestId?.trim()) throw new ValidationError("El ID de la solicitud es obligatorio")
+    if (!input.applicantId?.trim()) throw new ValidationError("El ID del usuario es obligatorio")
+    if (!input.message?.trim()) throw new ValidationError("El mensaje es obligatorio")
+    if (input.message.length > 500) throw new ValidationError("El mensaje no puede exceder 500 caracteres")
+  }
 }

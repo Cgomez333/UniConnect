@@ -1,20 +1,27 @@
-/**
- * hooks/application/useEvents.ts
- * 
- * Hook que orquesta la lógica de eventos.
- * Llama a los use cases del container y maneja UI state.
- * 
- * TODO: Implement
- * - getEvents() - query all events
- * - getEventById(id) - get single event details
- * - createEvent(payload) - admin only
- * - updateEvent(id, payload) - admin only
- * - deleteEvent(id) - admin only
- * - Handle loading, error, success states
- * - Convert domain errors to UI messages
- */
+import { useCallback, useState } from "react"
+
+interface UseEventsState {
+  loading: boolean
+  error: string | null
+}
+
 export function useEvents() {
+  const [state, setState] = useState<UseEventsState>({
+    loading: false,
+    error: null,
+  })
+
+  const notImplemented = useCallback(async () => {
+    setState({ loading: false, error: "Eventos pendientes de implementación (US-007/008)" })
+    throw new Error("Eventos pendientes de implementación (US-007/008)")
+  }, [])
+
   return {
-    // TODO: Implement
+    ...state,
+    getEvents: notImplemented,
+    getEventById: notImplemented,
+    createEvent: notImplemented,
+    updateEvent: notImplemented,
+    deleteEvent: notImplemented,
   }
 }
