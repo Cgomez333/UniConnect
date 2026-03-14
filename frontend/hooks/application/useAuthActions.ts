@@ -1,4 +1,13 @@
-import { signIn as signInLegacy, signUp as signUpLegacy } from "@/lib/services/authService"
+import { DIContainer } from "@/lib/services/di/container"
 
-export const signIn = signInLegacy
-export const signUp = signUpLegacy
+export async function signIn(input: { email: string; password: string }) {
+	const container = DIContainer.getInstance()
+	const useCase = container.getSignInWithPassword()
+	return useCase.execute(input)
+}
+
+export async function signUp(input: { email: string; password: string; fullName: string }) {
+	const container = DIContainer.getInstance()
+	const useCase = container.getSignUpWithPassword()
+	return useCase.execute(input)
+}

@@ -5,20 +5,56 @@ import { SupabaseMessageRepository } from "../infrastructure/repositories/Supaba
 import { SupabaseConversationRepository } from "../infrastructure/repositories/SupabaseConversationRepository"
 import { SupabaseEventRepository } from "../infrastructure/repositories/SupabaseEventRepository"
 import { SupabaseStudyGroupRepository } from "../infrastructure/repositories/SupabaseStudyGroupRepository"
+import { SupabaseAuthRepository } from "../infrastructure/repositories/SupabaseAuthRepository"
+import type { IStudyRequestRepository } from "../domain/repositories/IStudyRequestRepository"
+import type { IApplicationRepository } from "../domain/repositories/IApplicationRepository"
+import type { IStudyResourceRepository } from "../domain/repositories/IStudyResourceRepository"
+import type { IMessageRepository } from "../domain/repositories/IMessageRepository"
+import type { IConversationRepository } from "../domain/repositories/IConversationRepository"
+import type { IEventRepository } from "../domain/repositories/IEventRepository"
+import type { IStudyGroupRepository } from "../domain/repositories/IStudyGroupRepository"
+import type { IAuthRepository } from "../domain/repositories/IAuthRepository"
 
 import { GetFeedRequests } from "../domain/use-cases/study-requests/GetFeedRequests"
 import { CreateStudyRequest } from "../domain/use-cases/study-requests/CreateStudyRequest"
 import { UpdateStudyRequest } from "../domain/use-cases/study-requests/UpdateStudyRequest"
+import { GetStudyRequestById } from "../domain/use-cases/study-requests/GetStudyRequestById"
+import { GetStudyRequestsByAuthor } from "../domain/use-cases/study-requests/GetStudyRequestsByAuthor"
+import { UpdateStudyRequestStatus } from "../domain/use-cases/study-requests/UpdateStudyRequestStatus"
+import { IsStudyRequestAdmin } from "../domain/use-cases/study-requests/IsStudyRequestAdmin"
+import { GetStudyRequestAdmins } from "../domain/use-cases/study-requests/GetStudyRequestAdmins"
+import { AssignStudyRequestAdmin } from "../domain/use-cases/study-requests/AssignStudyRequestAdmin"
+import { RevokeStudyRequestAdmin } from "../domain/use-cases/study-requests/RevokeStudyRequestAdmin"
+import { UpdateStudyRequestContent } from "../domain/use-cases/study-requests/UpdateStudyRequestContent"
+import { CancelStudyRequest } from "../domain/use-cases/study-requests/CancelStudyRequest"
 import { ApplyToStudyRequest } from "../domain/use-cases/applications/ApplyToStudyRequest"
 import { ReviewApplication } from "../domain/use-cases/applications/ReviewApplication"
 import { GetApplicationsForRequest } from "../domain/use-cases/applications/GetApplicationsForRequest"
+import { GetMyApplicationStatus } from "../domain/use-cases/applications/GetMyApplicationStatus"
+import { GetApplicationsByRequest } from "../domain/use-cases/applications/GetApplicationsByRequest"
+import { GetReceivedApplicationsByAuthor } from "../domain/use-cases/applications/GetReceivedApplicationsByAuthor"
+import { GetApplicationsByApplicant } from "../domain/use-cases/applications/GetApplicationsByApplicant"
+import { CancelApplication } from "../domain/use-cases/applications/CancelApplication"
 
 import { GetStudyResourcesBySubject } from "../domain/use-cases/resources/GetStudyResourcesBySubject"
 import { UploadStudyResource } from "../domain/use-cases/resources/UploadStudyResource"
+import { GetStudyResourcesByUser } from "../domain/use-cases/resources/GetStudyResourcesByUser"
+import { GetStudyResourceById } from "../domain/use-cases/resources/GetStudyResourceById"
+import { UpdateStudyResource } from "../domain/use-cases/resources/UpdateStudyResource"
 
 import { GetConversations } from "../domain/use-cases/messaging/GetConversations"
 import { GetMessages } from "../domain/use-cases/messaging/GetMessages"
 import { SendMessage } from "../domain/use-cases/messaging/SendMessage"
+import { GetOrCreateConversation } from "../domain/use-cases/messaging/GetOrCreateConversation"
+import { SignInWithPassword } from "../domain/use-cases/auth/SignInWithPassword"
+import { SignUpWithPassword } from "../domain/use-cases/auth/SignUpWithPassword"
+import { SignOutUser } from "../domain/use-cases/auth/SignOutUser"
+import { ClearLocalSession } from "../domain/use-cases/auth/ClearLocalSession"
+import { GetCurrentSession } from "../domain/use-cases/auth/GetCurrentSession"
+import { GetMyAuthProfile } from "../domain/use-cases/auth/GetMyAuthProfile"
+import { SubscribeAuthStateChanges } from "../domain/use-cases/auth/SubscribeAuthStateChanges"
+import { GetOAuthSignInUrl } from "../domain/use-cases/auth/GetOAuthSignInUrl"
+import { ResolveSessionFromOAuthUrl } from "../domain/use-cases/auth/ResolveSessionFromOAuthUrl"
 
 /**
  * Dependency Injection Container
@@ -39,19 +75,47 @@ export class DIContainer {
   private conversationRepo?: SupabaseConversationRepository
   private eventRepo?: SupabaseEventRepository
   private studyGroupRepo?: SupabaseStudyGroupRepository
+  private authRepo?: SupabaseAuthRepository
 
   // Use Cases - lazy initialized
   private getFeedRequests?: GetFeedRequests
   private createStudyRequest?: CreateStudyRequest
   private updateStudyRequest?: UpdateStudyRequest
+  private getStudyRequestById?: GetStudyRequestById
+  private getStudyRequestsByAuthor?: GetStudyRequestsByAuthor
+  private updateStudyRequestStatus?: UpdateStudyRequestStatus
+  private isStudyRequestAdmin?: IsStudyRequestAdmin
+  private getStudyRequestAdmins?: GetStudyRequestAdmins
+  private assignStudyRequestAdmin?: AssignStudyRequestAdmin
+  private revokeStudyRequestAdmin?: RevokeStudyRequestAdmin
+  private updateStudyRequestContent?: UpdateStudyRequestContent
+  private cancelStudyRequest?: CancelStudyRequest
   private applyToStudyRequest?: ApplyToStudyRequest
   private reviewApplication?: ReviewApplication
   private getApplicationsForRequest?: GetApplicationsForRequest
+  private getMyApplicationStatus?: GetMyApplicationStatus
+  private getApplicationsByRequest?: GetApplicationsByRequest
+  private getReceivedApplicationsByAuthor?: GetReceivedApplicationsByAuthor
+  private getApplicationsByApplicant?: GetApplicationsByApplicant
+  private cancelApplication?: CancelApplication
   private getStudyResourcesBySubject?: GetStudyResourcesBySubject
   private uploadStudyResource?: UploadStudyResource
+  private getStudyResourcesByUser?: GetStudyResourcesByUser
+  private getStudyResourceById?: GetStudyResourceById
+  private updateStudyResource?: UpdateStudyResource
   private getConversations?: GetConversations
   private getMessages?: GetMessages
   private sendMessage?: SendMessage
+  private getOrCreateConversation?: GetOrCreateConversation
+  private signInWithPassword?: SignInWithPassword
+  private signUpWithPassword?: SignUpWithPassword
+  private signOutUser?: SignOutUser
+  private clearLocalSession?: ClearLocalSession
+  private getCurrentSession?: GetCurrentSession
+  private getMyAuthProfile?: GetMyAuthProfile
+  private subscribeAuthStateChanges?: SubscribeAuthStateChanges
+  private getOAuthSignInUrl?: GetOAuthSignInUrl
+  private resolveSessionFromOAuthUrl?: ResolveSessionFromOAuthUrl
 
   private constructor() {}
 
@@ -64,53 +128,60 @@ export class DIContainer {
 
   // ── Repository Getters ────────────────────────────────────────────────────
 
-  getStudyRequestRepository(): SupabaseStudyRequestRepository {
+  getStudyRequestRepository(): IStudyRequestRepository {
     if (!this.studyRequestRepo) {
       this.studyRequestRepo = new SupabaseStudyRequestRepository()
     }
     return this.studyRequestRepo
   }
 
-  getApplicationRepository(): SupabaseApplicationRepository {
+  getApplicationRepository(): IApplicationRepository {
     if (!this.applicationRepo) {
       this.applicationRepo = new SupabaseApplicationRepository()
     }
     return this.applicationRepo
   }
 
-  getStudyResourceRepository(): SupabaseStudyResourceRepository {
+  getStudyResourceRepository(): IStudyResourceRepository {
     if (!this.resourceRepo) {
       this.resourceRepo = new SupabaseStudyResourceRepository()
     }
     return this.resourceRepo
   }
 
-  getMessageRepository(): SupabaseMessageRepository {
+  getMessageRepository(): IMessageRepository {
     if (!this.messageRepo) {
       this.messageRepo = new SupabaseMessageRepository()
     }
     return this.messageRepo
   }
 
-  getConversationRepository(): SupabaseConversationRepository {
+  getConversationRepository(): IConversationRepository {
     if (!this.conversationRepo) {
       this.conversationRepo = new SupabaseConversationRepository()
     }
     return this.conversationRepo
   }
 
-  getEventRepository(): SupabaseEventRepository {
+  getEventRepository(): IEventRepository {
     if (!this.eventRepo) {
       this.eventRepo = new SupabaseEventRepository()
     }
     return this.eventRepo
   }
 
-  getStudyGroupRepository(): SupabaseStudyGroupRepository {
+  getStudyGroupRepository(): IStudyGroupRepository {
     if (!this.studyGroupRepo) {
       this.studyGroupRepo = new SupabaseStudyGroupRepository()
     }
     return this.studyGroupRepo
+  }
+
+  getAuthRepository(): IAuthRepository {
+    if (!this.authRepo) {
+      this.authRepo = new SupabaseAuthRepository()
+    }
+    return this.authRepo
   }
 
   // ── Use Case Getters: Study Requests ──────────────────────────────────────
@@ -134,6 +205,69 @@ export class DIContainer {
       this.updateStudyRequest = new UpdateStudyRequest(this.getStudyRequestRepository())
     }
     return this.updateStudyRequest
+  }
+
+  getGetStudyRequestById(): GetStudyRequestById {
+    if (!this.getStudyRequestById) {
+      this.getStudyRequestById = new GetStudyRequestById(this.getStudyRequestRepository())
+    }
+    return this.getStudyRequestById
+  }
+
+  getGetStudyRequestsByAuthor(): GetStudyRequestsByAuthor {
+    if (!this.getStudyRequestsByAuthor) {
+      this.getStudyRequestsByAuthor = new GetStudyRequestsByAuthor(this.getStudyRequestRepository())
+    }
+    return this.getStudyRequestsByAuthor
+  }
+
+  getUpdateStudyRequestStatus(): UpdateStudyRequestStatus {
+    if (!this.updateStudyRequestStatus) {
+      this.updateStudyRequestStatus = new UpdateStudyRequestStatus(this.getStudyRequestRepository())
+    }
+    return this.updateStudyRequestStatus
+  }
+
+  getIsStudyRequestAdmin(): IsStudyRequestAdmin {
+    if (!this.isStudyRequestAdmin) {
+      this.isStudyRequestAdmin = new IsStudyRequestAdmin(this.getStudyRequestRepository())
+    }
+    return this.isStudyRequestAdmin
+  }
+
+  getGetStudyRequestAdmins(): GetStudyRequestAdmins {
+    if (!this.getStudyRequestAdmins) {
+      this.getStudyRequestAdmins = new GetStudyRequestAdmins(this.getStudyRequestRepository())
+    }
+    return this.getStudyRequestAdmins
+  }
+
+  getAssignStudyRequestAdmin(): AssignStudyRequestAdmin {
+    if (!this.assignStudyRequestAdmin) {
+      this.assignStudyRequestAdmin = new AssignStudyRequestAdmin(this.getStudyRequestRepository())
+    }
+    return this.assignStudyRequestAdmin
+  }
+
+  getRevokeStudyRequestAdmin(): RevokeStudyRequestAdmin {
+    if (!this.revokeStudyRequestAdmin) {
+      this.revokeStudyRequestAdmin = new RevokeStudyRequestAdmin(this.getStudyRequestRepository())
+    }
+    return this.revokeStudyRequestAdmin
+  }
+
+  getUpdateStudyRequestContent(): UpdateStudyRequestContent {
+    if (!this.updateStudyRequestContent) {
+      this.updateStudyRequestContent = new UpdateStudyRequestContent(this.getStudyRequestRepository())
+    }
+    return this.updateStudyRequestContent
+  }
+
+  getCancelStudyRequest(): CancelStudyRequest {
+    if (!this.cancelStudyRequest) {
+      this.cancelStudyRequest = new CancelStudyRequest(this.getStudyRequestRepository())
+    }
+    return this.cancelStudyRequest
   }
 
   // ── Use Case Getters: Applications ────────────────────────────────────────
@@ -165,6 +299,41 @@ export class DIContainer {
     return this.getApplicationsForRequest
   }
 
+  getGetMyApplicationStatus(): GetMyApplicationStatus {
+    if (!this.getMyApplicationStatus) {
+      this.getMyApplicationStatus = new GetMyApplicationStatus(this.getApplicationRepository())
+    }
+    return this.getMyApplicationStatus
+  }
+
+  getGetApplicationsByRequest(): GetApplicationsByRequest {
+    if (!this.getApplicationsByRequest) {
+      this.getApplicationsByRequest = new GetApplicationsByRequest(this.getApplicationRepository())
+    }
+    return this.getApplicationsByRequest
+  }
+
+  getGetReceivedApplicationsByAuthor(): GetReceivedApplicationsByAuthor {
+    if (!this.getReceivedApplicationsByAuthor) {
+      this.getReceivedApplicationsByAuthor = new GetReceivedApplicationsByAuthor(this.getApplicationRepository())
+    }
+    return this.getReceivedApplicationsByAuthor
+  }
+
+  getGetApplicationsByApplicant(): GetApplicationsByApplicant {
+    if (!this.getApplicationsByApplicant) {
+      this.getApplicationsByApplicant = new GetApplicationsByApplicant(this.getApplicationRepository())
+    }
+    return this.getApplicationsByApplicant
+  }
+
+  getCancelApplication(): CancelApplication {
+    if (!this.cancelApplication) {
+      this.cancelApplication = new CancelApplication(this.getApplicationRepository())
+    }
+    return this.cancelApplication
+  }
+
   // ── Use Case Getters: Resources ───────────────────────────────────────────
 
   getGetStudyResourcesBySubject(): GetStudyResourcesBySubject {
@@ -179,6 +348,27 @@ export class DIContainer {
       this.uploadStudyResource = new UploadStudyResource(this.getStudyResourceRepository())
     }
     return this.uploadStudyResource
+  }
+
+  getGetStudyResourcesByUser(): GetStudyResourcesByUser {
+    if (!this.getStudyResourcesByUser) {
+      this.getStudyResourcesByUser = new GetStudyResourcesByUser(this.getStudyResourceRepository())
+    }
+    return this.getStudyResourcesByUser
+  }
+
+  getGetStudyResourceById(): GetStudyResourceById {
+    if (!this.getStudyResourceById) {
+      this.getStudyResourceById = new GetStudyResourceById(this.getStudyResourceRepository())
+    }
+    return this.getStudyResourceById
+  }
+
+  getUpdateStudyResource(): UpdateStudyResource {
+    if (!this.updateStudyResource) {
+      this.updateStudyResource = new UpdateStudyResource(this.getStudyResourceRepository())
+    }
+    return this.updateStudyResource
   }
 
   // ── Use Case Getters: Messaging ───────────────────────────────────────────
@@ -202,5 +392,77 @@ export class DIContainer {
       this.sendMessage = new SendMessage(this.getMessageRepository(), this.getConversationRepository())
     }
     return this.sendMessage
+  }
+
+  getGetOrCreateConversation(): GetOrCreateConversation {
+    if (!this.getOrCreateConversation) {
+      this.getOrCreateConversation = new GetOrCreateConversation(this.getConversationRepository())
+    }
+    return this.getOrCreateConversation
+  }
+
+  // ── Use Case Getters: Auth ────────────────────────────────────────────────
+
+  getSignInWithPassword(): SignInWithPassword {
+    if (!this.signInWithPassword) {
+      this.signInWithPassword = new SignInWithPassword(this.getAuthRepository())
+    }
+    return this.signInWithPassword
+  }
+
+  getSignUpWithPassword(): SignUpWithPassword {
+    if (!this.signUpWithPassword) {
+      this.signUpWithPassword = new SignUpWithPassword(this.getAuthRepository())
+    }
+    return this.signUpWithPassword
+  }
+
+  getSignOutUser(): SignOutUser {
+    if (!this.signOutUser) {
+      this.signOutUser = new SignOutUser(this.getAuthRepository())
+    }
+    return this.signOutUser
+  }
+
+  getClearLocalSession(): ClearLocalSession {
+    if (!this.clearLocalSession) {
+      this.clearLocalSession = new ClearLocalSession(this.getAuthRepository())
+    }
+    return this.clearLocalSession
+  }
+
+  getGetCurrentSession(): GetCurrentSession {
+    if (!this.getCurrentSession) {
+      this.getCurrentSession = new GetCurrentSession(this.getAuthRepository())
+    }
+    return this.getCurrentSession
+  }
+
+  getGetMyAuthProfile(): GetMyAuthProfile {
+    if (!this.getMyAuthProfile) {
+      this.getMyAuthProfile = new GetMyAuthProfile(this.getAuthRepository())
+    }
+    return this.getMyAuthProfile
+  }
+
+  getSubscribeAuthStateChanges(): SubscribeAuthStateChanges {
+    if (!this.subscribeAuthStateChanges) {
+      this.subscribeAuthStateChanges = new SubscribeAuthStateChanges(this.getAuthRepository())
+    }
+    return this.subscribeAuthStateChanges
+  }
+
+  getGetOAuthSignInUrl(): GetOAuthSignInUrl {
+    if (!this.getOAuthSignInUrl) {
+      this.getOAuthSignInUrl = new GetOAuthSignInUrl(this.getAuthRepository())
+    }
+    return this.getOAuthSignInUrl
+  }
+
+  getResolveSessionFromOAuthUrl(): ResolveSessionFromOAuthUrl {
+    if (!this.resolveSessionFromOAuthUrl) {
+      this.resolveSessionFromOAuthUrl = new ResolveSessionFromOAuthUrl(this.getAuthRepository())
+    }
+    return this.resolveSessionFromOAuthUrl
   }
 }

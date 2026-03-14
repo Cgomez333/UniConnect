@@ -1,12 +1,7 @@
 import {
-  getMyProfile,
-  onAuthStateChange,
-  signIn as sbSignIn,
-  signOut as sbSignOut,
-  signUp as sbSignUp,
-} from "@/lib/services/authService";
+  DIContainer,
+} from "@/lib/services/di/container";
 import { registerAndSavePushToken } from "@/lib/services/pushService";
-import { supabase } from "@/lib/supabase";
 import { create } from "zustand";
 
 export type UserRole = "estudiante" | "admin";
@@ -73,6 +68,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setUser: (user) => set({ user, isAuthenticated: !!user }),
 
   initialize: () => {
+    const container = DIContainer.getInstance()
+    const getCurrentSession = container.getGetCurrentSession()
+    const getMyAuthProfile = container.getGetMyAuthProfile()
+    const subscribeAuthStateChanges = container.getSubscribeAuthStateChanges()
+    const clearLocalSessionUseCase = container.getClearLocalSession()
+
     const hydrationWatchdog = setTimeout(() => {
       if (get().isHydrating) {
         console.warn("[authStore] Hydration timeout. Forzando salida de estado de carga.");
@@ -88,7 +89,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     const clearCorruptedSession = async () => {
       try {
-        await supabase.auth.signOut({ scope: "local" as any });
+        await clearLocalSessionUseCase.execute()
       } catch {
         // Si falla la limpieza remota/local, igual forzamos estado no autenticado.
       }
@@ -104,7 +105,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
           if (!email?.endsWith('@ucaldas.edu.co')) {
             console.warn("[authStore] Usuario rechazado: no es de ucaldas.edu.co -", email);
-            await supabase.auth.signOut();
+            await clearLocalSessionUseCase.execute()
             set({ user: null, isAuthenticated: false, isHydrating: false });
             return;
           }
@@ -116,7 +117,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             isHydrating: true,
           }));
 
-          const profile = await withTimeout(getMyProfile(), PROFILE_TIMEOUT_MS).catch((error: unknown) => {
+          const profile = await withTimeout(getMyAuthProfile.execute(), PROFILE_TIMEOUT_MS).catch((error: unknown) => {
             console.warn("[authStore] No se pudo obtener perfil completo:", error);
             return null;
           });
@@ -151,7 +152,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             });
 
             // Reintento en segundo plano para no fijar rol incorrecto por timeout.
-            getMyProfile()
+            getMyAuthProfile.execute()
               .then((profileRetry) => {
                 if (!profileRetry) return;
                 set((state) => ({
@@ -194,7 +195,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     (async () => {
       try {
-        const { data: { session } } = await withTimeout(supabase.auth.getSession(), SESSION_TIMEOUT_MS);
+        const session = await withTimeout(getCurrentSession.execute(), SESSION_TIMEOUT_MS);
         await processSession(session);
       } catch (error) {
         if (isInvalidRefreshTokenError(error)) {
@@ -208,7 +209,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
     })();
 
-    const { data: { subscription } } = onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = subscribeAuthStateChanges.execute(async (event, session) => {
       if (event === "SIGNED_OUT") {
         set({ user: null, isAuthenticated: false, isHydrating: false });
         return;
@@ -233,11 +234,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   signIn: async (email, password) => {
+    const container = DIContainer.getInstance()
+    const signInWithPassword = container.getSignInWithPassword()
+
     const normalizedEmail = email.trim().toLowerCase();
     set({ isLoading: true, isHydrating: true });
 
     try {
-      const { user } = await sbSignIn({ email: normalizedEmail, password });
+      const { user } = await signInWithPassword.execute({
+        email: normalizedEmail,
+        password,
+      })
       if (!user) throw new Error("No se pudo iniciar sesión");
     } catch (error) {
       set({ user: null, isAuthenticated: false, isHydrating: false });
@@ -248,18 +255,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   signUp: async (email, password, fullName) => {
+    const container = DIContainer.getInstance()
+    const signUpWithPassword = container.getSignUpWithPassword()
+
     set({ isLoading: true });
     try {
-      await sbSignUp({ email, password, fullName });
+      await signUpWithPassword.execute({ email, password, fullName })
     } finally {
       set({ isLoading: false });
     }
   },
 
   signOut: async () => {
+    const container = DIContainer.getInstance()
+    const signOutUser = container.getSignOutUser()
+
     set({ isLoading: true });
     try {
-      await sbSignOut();
+      await signOutUser.execute()
       set({ user: null, isAuthenticated: false, isHydrating: false });
     } finally {
       set({ isLoading: false });

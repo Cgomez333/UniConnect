@@ -76,24 +76,24 @@ export function useResources() {
 
   const getResourcesByUser = useCallback(
     async (userId: string) => {
-      const repository = container.getStudyResourceRepository()
-      return repository.getByUser(userId)
+      const useCase = container.getGetStudyResourcesByUser()
+      return useCase.execute(userId)
     },
     [container]
   )
 
   const getResourceById = useCallback(
     async (resourceId: string) => {
-      const repository = container.getStudyResourceRepository()
-      return repository.getById(resourceId)
+      const useCase = container.getGetStudyResourceById()
+      return useCase.execute(resourceId)
     },
     [container]
   )
 
   const updateResource = useCallback(
     async (resourceId: string, userId: string, payload: { title?: string; description?: string | null }) => {
-      const repository = container.getStudyResourceRepository()
-      return repository.update(resourceId, userId, payload)
+      const useCase = container.getUpdateStudyResource()
+      return useCase.execute(resourceId, userId, payload)
     },
     [container]
   )

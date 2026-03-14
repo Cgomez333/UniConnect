@@ -5,3 +5,14 @@ export type { IMessageRepository } from "./IMessageRepository"
 export type { IConversationRepository } from "./IConversationRepository"
 export type { IStudyGroupRepository } from "./IStudyGroupRepository"
 export type { IStudyResourceRepository } from "./IStudyResourceRepository"
+export type {
+	IAuthRepository,
+	SignInInput,
+	SignInResult,
+	SignUpInput,
+	SignUpResult,
+	AuthProfile,
+	AuthStateChangeCallback,
+	OAuthSignInUrlInput,
+	OAuthSessionResolutionMode,
+} from "./IAuthRepository"

@@ -1,6 +1,5 @@
-import { resolveSessionFromOAuthUrl } from "@/lib/services/googleAuthService";
 import { SplashLoader } from "@/components/ui/SplashLoader";
-import { supabase } from "@/lib/supabase";
+import { DIContainer } from "@/lib/services/di/container";
 import { useAuthStore } from "@/store/useAuthStore";
 import { router } from "expo-router";
 import { useEffect, useRef, useState } from "react";
@@ -24,74 +23,15 @@ const withTimeout = async <T,>(
   }
 };
 
-interface ProfileRow {
-  id: string;
-  full_name: string;
-  avatar_url: string | null;
-  role: "estudiante" | "admin";
-  semester: number | null;
-  bio: string | null;
-}
-
-const fetchProfileByUserId = async (userId: string): Promise<ProfileRow | null> => {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("id, full_name, avatar_url, role, semester, bio")
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (error) {
-    return null;
-  }
-
-  return data as ProfileRow | null;
-};
-
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const getSessionUser = async () => {
-  const session = await withTimeout(
-    supabase.auth.getSession().then((result) => result.data.session),
-    2500,
-    null
-  );
-  return session?.user ?? null;
-};
-
-const waitForSessionUser = async (attempts = 5, delayMs = 350) => {
-  for (let attempt = 0; attempt < attempts; attempt++) {
-    const sessionUser = await getSessionUser();
-    if (sessionUser) {
-      return sessionUser;
-    }
-
-    if (attempt < attempts - 1) {
-      await sleep(delayMs);
-    }
-  }
-
-  return null;
-};
-
-const resolveRoleForRouting = async (
-  userId: string,
-  fallbackRole: "estudiante" | "admin"
-): Promise<"estudiante" | "admin"> => {
-  // Reintento corto: evita enviar admins al feed por timeout temporal.
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const profile = await withTimeout<ProfileRow | null>(
-      fetchProfileByUserId(userId),
-      4000,
-      null
-    );
-    if (profile?.role) return profile.role;
-    if (attempt < 1) await sleep(500);
-  }
-
-  return fallbackRole;
-};
-
 export default function OAuthCallbackScreen() {
+  const container = DIContainer.getInstance();
+  const getCurrentSession = container.getGetCurrentSession();
+  const getMyAuthProfile = container.getGetMyAuthProfile();
+  const resolveOAuthSession = container.getResolveSessionFromOAuthUrl();
+  const signOutUser = container.getSignOutUser();
+
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const isHydrating = useAuthStore((s) => s.isHydrating);
   const user = useAuthStore((s) => s.user);
@@ -102,6 +42,38 @@ export default function OAuthCallbackScreen() {
   const lastProcessedUrlRef = useRef<string | null>(null);
   const [waitExpired, setWaitExpired] = useState(false);
   const [hardTimeoutExpired, setHardTimeoutExpired] = useState(false);
+
+  const getSessionUser = async () => {
+    const session = await withTimeout(getCurrentSession.execute(), 2500, null);
+    return session?.user ?? null;
+  };
+
+  const waitForSessionUser = async (attempts = 5, delayMs = 350) => {
+    for (let attempt = 0; attempt < attempts; attempt++) {
+      const sessionUser = await getSessionUser();
+      if (sessionUser) {
+        return sessionUser;
+      }
+
+      if (attempt < attempts - 1) {
+        await sleep(delayMs);
+      }
+    }
+
+    return null;
+  };
+
+  const resolveRoleForRouting = async (
+    fallbackRole: "estudiante" | "admin"
+  ): Promise<"estudiante" | "admin"> => {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const profile = await withTimeout(getMyAuthProfile.execute(), 4000, null);
+      if (profile?.role) return profile.role;
+      if (attempt < 1) await sleep(500);
+    }
+
+    return fallbackRole;
+  };
 
   useEffect(() => {
     const t = setTimeout(() => setWaitExpired(true), 900);
@@ -126,14 +98,11 @@ export default function OAuthCallbackScreen() {
     router.replace("/(tabs)" as any);
   };
 
-  const routeByRoleOptimistic = (
-    userId: string,
-    fallbackRole: "estudiante" | "admin"
-  ) => {
+  const routeByRoleOptimistic = (fallbackRole: "estudiante" | "admin") => {
     // Fast path: route immediately, then correct only if backend resolves admin.
     routeByRole(fallbackRole);
 
-    resolveRoleForRouting(userId, fallbackRole)
+    resolveRoleForRouting(fallbackRole)
       .then((resolvedRole) => {
         if (resolvedRole !== fallbackRole) {
           routeByRole(resolvedRole);
@@ -144,7 +113,7 @@ export default function OAuthCallbackScreen() {
 
   useEffect(() => {
     if (isAuthenticated && user) {
-      routeByRoleOptimistic(user.id, user.role);
+      routeByRoleOptimistic(user.role);
       return;
     }
 
@@ -156,7 +125,7 @@ export default function OAuthCallbackScreen() {
       if (incomingUrl && lastProcessedUrlRef.current !== incomingUrl) {
         lastProcessedUrlRef.current = incomingUrl;
         try {
-          await resolveSessionFromOAuthUrl(incomingUrl);
+          await resolveOAuthSession.execute(incomingUrl);
         } catch {
           // Continuamos con recuperación por sesión/store.
         }
@@ -167,7 +136,7 @@ export default function OAuthCallbackScreen() {
       if (!sessionUser) {
         const currentState = useAuthStore.getState();
         if (currentState.isAuthenticated && currentState.user) {
-            routeByRoleOptimistic(currentState.user.id, currentState.user.role);
+          routeByRoleOptimistic(currentState.user.role);
           return;
         }
 
@@ -176,7 +145,7 @@ export default function OAuthCallbackScreen() {
         if (!sessionUser) {
           const lateState = useAuthStore.getState();
           if (lateState.isAuthenticated && lateState.user) {
-            routeByRoleOptimistic(lateState.user.id, lateState.user.role);
+            routeByRoleOptimistic(lateState.user.role);
             return;
           }
 
@@ -191,7 +160,7 @@ export default function OAuthCallbackScreen() {
 
       const email = sessionUser.email?.toLowerCase() ?? "";
       if (!email.endsWith("@ucaldas.edu.co")) {
-        await supabase.auth.signOut();
+        await signOutUser.execute();
         router.replace("/login" as any);
         return;
       }
@@ -207,11 +176,7 @@ export default function OAuthCallbackScreen() {
         bio: null,
       };
 
-      const profile = await withTimeout<ProfileRow | null>(
-        fetchProfileByUserId(sessionUser.id),
-        4000,
-        null
-      );
+      const profile = await withTimeout(getMyAuthProfile.execute(), 4000, null);
 
       const resolvedUser = profile
         ? {
@@ -226,7 +191,7 @@ export default function OAuthCallbackScreen() {
 
       setUser(resolvedUser);
 
-      const roleForRoute = await resolveRoleForRouting(sessionUser.id, resolvedUser.role);
+      const roleForRoute = await resolveRoleForRouting(resolvedUser.role);
       routeByRole(roleForRoute);
     })().catch(() => {
       router.replace("/login" as any);
@@ -244,10 +209,9 @@ export default function OAuthCallbackScreen() {
 
     (async () => {
       try {
-        const { data } = await supabase.auth.getSession();
-        const sessionUser = data.session?.user;
+        const sessionUser = await getSessionUser();
         if (sessionUser) {
-          const roleForRoute = await resolveRoleForRouting(sessionUser.id, "estudiante");
+          const roleForRoute = await resolveRoleForRouting("estudiante");
           routeByRole(roleForRoute);
           return;
         }

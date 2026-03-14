@@ -61,11 +61,11 @@ export function useStudyRequests() {
   )
 
   const updateStatus = useCallback(
-    async (requestId: string, userId: string, status: "abierta" | "cerrada" | "expirada") => {
+    async (requestId: string, _userId: string, status: "abierta" | "cerrada" | "expirada") => {
       setState((prev) => ({ ...prev, loading: true }))
       try {
-        const repository = container.getStudyRequestRepository()
-        await repository.updateStatus(requestId, status)
+        const useCase = container.getUpdateStudyRequestStatus()
+        await useCase.execute(requestId, status)
         setState((prev) => ({ ...prev, loading: false, error: null }))
       } catch (err) {
         const errorMsg = toErrorMessage(err, "Error al actualizar solicitud")
@@ -80,8 +80,8 @@ export function useStudyRequests() {
     async (requestId: string) => {
       setState((prev) => ({ ...prev, loading: true, error: null }))
       try {
-        const repository = container.getStudyRequestRepository()
-        const result = await repository.getById(requestId)
+        const useCase = container.getGetStudyRequestById()
+        const result = await useCase.execute(requestId)
         setState((prev) => ({ ...prev, loading: false }))
         return result
       } catch (err) {
@@ -95,56 +95,56 @@ export function useStudyRequests() {
 
   const getRequestsByAuthor = useCallback(
     async (authorId: string) => {
-      const repo = container.getStudyRequestRepository()
-      return repo.getByAuthor(authorId)
+      const useCase = container.getGetStudyRequestsByAuthor()
+      return useCase.execute(authorId)
     },
     [container]
   )
 
   const isAdmin = useCallback(
     async (requestId: string, userId: string) => {
-      const repo = container.getStudyRequestRepository()
-      return repo.isAdmin(requestId, userId)
+      const useCase = container.getIsStudyRequestAdmin()
+      return useCase.execute(requestId, userId)
     },
     [container]
   )
 
   const getAdmins = useCallback(
     async (requestId: string) => {
-      const repo = container.getStudyRequestRepository()
-      return repo.getAdmins(requestId)
+      const useCase = container.getGetStudyRequestAdmins()
+      return useCase.execute(requestId)
     },
     [container]
   )
 
   const assignAdmin = useCallback(
     async (requestId: string, targetUserId: string, actorUserId: string) => {
-      const repo = container.getStudyRequestRepository()
-      return repo.assignAdmin(requestId, targetUserId, actorUserId)
+      const useCase = container.getAssignStudyRequestAdmin()
+      return useCase.execute(requestId, targetUserId, actorUserId)
     },
     [container]
   )
 
   const revokeAdmin = useCallback(
     async (requestId: string, targetUserId: string, actorUserId: string) => {
-      const repo = container.getStudyRequestRepository()
-      return repo.revokeAdmin(requestId, targetUserId, actorUserId)
+      const useCase = container.getRevokeStudyRequestAdmin()
+      return useCase.execute(requestId, targetUserId, actorUserId)
     },
     [container]
   )
 
   const updateRequestContent = useCallback(
     async (requestId: string, userId: string, payload: { title?: string; description?: string }) => {
-      const repo = container.getStudyRequestRepository()
-      return repo.updateContent(requestId, userId, payload)
+      const useCase = container.getUpdateStudyRequestContent()
+      return useCase.execute(requestId, userId, payload)
     },
     [container]
   )
 
   const cancelRequest = useCallback(
     async (requestId: string, userId: string) => {
-      const repo = container.getStudyRequestRepository()
-      return repo.cancel(requestId, userId)
+      const useCase = container.getCancelStudyRequest()
+      return useCase.execute(requestId, userId)
     },
     [container]
   )

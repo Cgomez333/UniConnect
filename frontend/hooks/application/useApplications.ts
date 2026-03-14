@@ -72,8 +72,8 @@ export function useApplications() {
   const getMyApplicationStatus = useCallback(
     async (requestId: string, userId: string) => {
       try {
-        const repository = container.getApplicationRepository()
-        return await repository.getMyApplicationStatus(requestId, userId)
+        const useCase = container.getGetMyApplicationStatus()
+        return await useCase.execute(requestId, userId)
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : "Error al validar postulación"
         setState((prev) => ({ ...prev, error: errorMsg }))
@@ -85,32 +85,32 @@ export function useApplications() {
 
   const getApplicationsByRequest = useCallback(
     async (requestId: string) => {
-      const repository = container.getApplicationRepository()
-      return repository.getByRequest(requestId)
+      const useCase = container.getGetApplicationsByRequest()
+      return useCase.execute(requestId)
     },
     [container]
   )
 
   const getReceivedByAuthor = useCallback(
     async (authorId: string) => {
-      const repository = container.getApplicationRepository()
-      return repository.getReceivedByAuthor(authorId)
+      const useCase = container.getGetReceivedApplicationsByAuthor()
+      return useCase.execute(authorId)
     },
     [container]
   )
 
   const getByApplicant = useCallback(
     async (applicantId: string) => {
-      const repository = container.getApplicationRepository()
-      return repository.getByApplicant(applicantId)
+      const useCase = container.getGetApplicationsByApplicant()
+      return useCase.execute(applicantId)
     },
     [container]
   )
 
   const cancelMyApplication = useCallback(
     async (requestId: string, userId: string) => {
-      const repo = container.getApplicationRepository()
-      return repo.cancel(requestId, userId)
+      const useCase = container.getCancelApplication()
+      return useCase.execute(requestId, userId)
     },
     [container]
   )
